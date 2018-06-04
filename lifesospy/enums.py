@@ -66,6 +66,7 @@ class EventCode(IntEnum):
     Close = 0x0a48
     Tamper = 0x0a50
     Trigger = 0x0a58
+    Panic = 0x0a60
 
     @classmethod
     def has_value(cls, value):

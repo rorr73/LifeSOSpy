@@ -5,6 +5,7 @@ setup(
     version='0.1.0',
     packages=['lifesospy'],
     install_requires=['aenum'],
+    python_requires='>=3.5.3',
     description='Provides an interface to LifeSOS alarm systems.',
     author='Richard Orr',
     url='https://github.com/rorr73/lifesospy',
