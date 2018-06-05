@@ -1,4 +1,5 @@
-from lifesospy.enums import *
+from lifesospy.enums import (
+    DeviceType, DeviceEventCode as EventCode, DCFlags)
 
 class DeviceEvent(object):
     """Represents a device event."""

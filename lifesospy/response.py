@@ -132,7 +132,7 @@ class DeviceInfoResponse(Response):
 
     def __init__(self, text):
         self._command_name = text[0:2]
-        self._device_category = DC_ALL[text[1:2]]
+        self._device_category = DC_ALL_LOOKUP[text[1:2]]
         text = text[2:]
         if self._command_name.startswith(CMD_DEVBYZON_PREFIX):
             self._index = int(text[0:2], 16)
@@ -323,7 +323,7 @@ class DeviceNotFoundResponse(Response):
 
     def __init__(self, text):
         self._command_name = text[0:2]
-        self._device_category = DC_ALL[text[1:2]]
+        self._device_category = DC_ALL_LOOKUP[text[1:2]]
 
     @property
     def command_name(self):

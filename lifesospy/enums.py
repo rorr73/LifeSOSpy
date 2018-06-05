@@ -53,7 +53,7 @@ class DeviceType(IntEnum):
     def has_value(cls, value):
         return any(value == item.value for item in cls)
 
-class EventCode(IntEnum):
+class DeviceEventCode(IntEnum):
     """Type of event raised by a device."""
     Test = 0x0a01
     Away = 0x0a10
@@ -138,42 +138,56 @@ class ContactIDEventQualifier(IntEnum):
 
 class ContactIDEventCode(IntEnum):
     """Type of event indicated by a ContactID message."""
-    Medical = 0x100
+
+    # ALARMS
+
+    # Medical Alarms -100
+    MedicalAlarm = 0x100
     PersonalEmergency = 0x101
     FailToReportIn = 0x102
-    Fire = 0x110
-    Smoke = 0x111
+
+    # Fire Alarms -110
+    FireAlarm = 0x110
+    SmokeAlarm = 0x111
     Combustion = 0x112
     WaterFlow = 0x113
     Heat = 0x114
     PullStation = 0x115
     Duct = 0x116
     Flame = 0x117
-    Fire_NearAlarm = 0x118
-    Panic = 0x120
+    NearAlarm_Fire = 0x118
+
+    # Panic Alarms -120
+    PanicAlarm = 0x120
     Duress = 0x121
     Silent = 0x122
     Audible = 0x123
     Duress_AccessGranted = 0x124
     Duress_EgressGranted = 0x125
-    Burglary = 0x130
+
+    # Burglar Alarms -130
+    BurglarAlarm = 0x130
     Perimeter = 0x131
     Interior = 0x132
-    AlwaysOnBurglar = 0x133
+    AlwaysOn_Burglar = 0x133
     EntryExit = 0x134
     DayNight = 0x135
     Outdoor = 0x136
-    Tamper = 0x137
-    Burglar_NearAlarm = 0x138
+    BurglarSensorTampered = 0x137
+    NearAlarm_Burglar = 0x138
     IntrusionVerifier = 0x139
+
+    # General Alarm -140
     GeneralAlarm = 0x140
     PollingLoopOpen_Alarm = 0x141
     PollingLoopShort_Alarm = 0x142
     ExpansionModuleFailure_Alarm = 0x143
-    SensorTamper_Alarm = 0x144
+    KeypadSensorTampered = 0x144
     ExpansionModuleTamper = 0x145
     SilentBurglary = 0x146
     SensorSupervisionFailure = 0x147
+
+    # 24 Hour Non-Burglary - 150 and 160
     AlwaysOnNonBurglary = 0x150
     GasDetected = 0x151
     Refrigeration = 0x152
@@ -187,6 +201,12 @@ class ContactIDEventCode(IntEnum):
     LossOfAirFlow = 0x161
     CarbonMonoxideDetected = 0x162
     TankLevel = 0x163
+    HighLimitAlarm = 0x168
+    LowLimitAlarm = 0x169
+
+    # SUPERVISORY
+
+    # Fire Supervisory - 200 and 210
     FireSupervisory = 0x200
     LowWaterPressure = 0x201
     LowCO2 = 0x202
@@ -194,9 +214,13 @@ class ContactIDEventCode(IntEnum):
     LowWaterLevel = 0x204
     PumpActivated = 0x205
     PumpFailure = 0x206
+
+    # TROUBLES
+
+    # System Troubles -300 and 310
     SystemTrouble = 0x300
-    ACLoss = 0x301
-    LowSystemBattery = 0x302
+    ACPowerLoss = 0x301
+    BaseUnitLowBattery = 0x302
     RAMChecksumBad = 0x303
     ROMChecksumBad = 0x304
     SystemReset = 0x305
@@ -208,6 +232,8 @@ class ContactIDEventCode(IntEnum):
     BatteryMissingDead = 0x311
     PowerSupplyOvercurrent = 0x312
     EngineerReset = 0x313
+
+    # Sounder / Relay Troubles -320
     SounderRelay = 0x320
     Bell1 = 0x321
     Bell2 = 0x322
@@ -216,6 +242,8 @@ class ContactIDEventCode(IntEnum):
     ReversingRelay = 0x325
     NotificationApplianceCkt3 = 0x326
     NotificationApplianceCkt4 = 0x327
+
+    # System Peripheral Trouble -330 and 340
     SystemPeripheralTrouble = 0x330
     PollingLoopOpen_Trouble = 0x331
     PollingLoopShort_Trouble = 0x332
@@ -230,14 +258,18 @@ class ContactIDEventCode(IntEnum):
     ExpModuleACLoss = 0x342
     ExpModuleSelfTestFail = 0x343
     RFReceiverJamDetect = 0x344
+
+    # Communication Troubles -350 and 360
     CommunicationTrouble = 0x350
     Telco1Fault = 0x351
     Telco2Fault = 0x352
     LongRangeRadioXmitterFault = 0x353
-    FailureToCommunicateEvent = 0x354
+    CMSReportFail = 0x354
     LossOfRadioSupervision = 0x355
-    LossOfCentralPolling = 0x356
+    LossOfCMSPolling = 0x356
     LongRangeRadioVSWRProblem = 0x357
+
+    # Protection Loop -370
     ProtectionLoop = 0x370
     ProtectionLoopOpen = 0x371
     ProtectionLoopShort = 0x372
@@ -247,10 +279,12 @@ class ContactIDEventCode(IntEnum):
     HoldUpZoneTrouble = 0x376
     SwingerTrouble = 0x377
     CrossZoneTrouble = 0x378
+
+    # Sensor Trouble -380
     SensorTrouble = 0x380
     LossOfSupervision_RF = 0x381
     LossOfSupervision_RPM = 0x382
-    SensorTamper_Trouble = 0x383
+    SensorTamper = 0x383
     RFLowBattery = 0x384
     SmokeDetectorHiSensitivity = 0x385
     SmokeDetectorLowSensitivity = 0x386
@@ -260,7 +294,11 @@ class ContactIDEventCode(IntEnum):
     SensorWatchTrouble = 0x391
     DriftCompensationError = 0x392
     MaintenanceAlert = 0x393
-    OpenClose = 0x400
+
+    # OPEN/CLOSE/REMOTE ACCESS
+
+    # Open/Close -400, 440,450
+    Away = 0x400
     OCByUser = 0x401
     GroupOC = 0x402
     AutomaticOC = 0x403
@@ -268,10 +306,12 @@ class ContactIDEventCode(IntEnum):
     DeferredOC = 0x405
     Cancel = 0x406
     RemoteArmDisarm = 0x407
-    QuickArm = 0x408
+    Away_QuickArm = 0x408
     KeyswitchOC = 0x409
+
     ArmedSTAY = 0x441
     KeyswitchArmedSTAY = 0x442
+
     ExceptionOC = 0x450
     EarlyOC = 0x451
     LateOC = 0x452
@@ -288,12 +328,16 @@ class ContactIDEventCode(IntEnum):
     AutoArmTimeExtended = 0x464
     PanicAlarmReset = 0x465
     ServiceOnOffPremises = 0x466
+
+    # Remote Access -410
     CallbackRequestMade = 0x411
     SuccessfulDownloadAccess = 0x412
     UnsuccessfulAccess = 0x413
     SystemShutdownCommandReceived = 0x414
     DialerShutdownCommandReceived = 0x415
     SuccessfulUpload = 0x416
+
+    # Access control -420,430
     AccessDenied = 0x421
     AccessReportByUser = 0x422
     ForcedAccess = 0x423
@@ -308,7 +352,13 @@ class ContactIDEventCode(IntEnum):
     AccessRelayTriggerFail = 0x432
     AccessRTEShunt = 0x433
     AccessDSMShunt = 0x434
+
+    # BYPASSES / DISABLES
+
+    # System Disables -500 and 510
     AccessReaderDisable = 0x501
+
+    # Sounder / Relay Disables -520
     SounderRelayDisable = 0x520
     Bell1Disable = 0x521
     Bell2Disable = 0x522
@@ -317,25 +367,35 @@ class ContactIDEventCode(IntEnum):
     ReversingRelayDisable = 0x525
     NotificationApplianceCkt3Disable = 0x526
     NotificationApplianceCkt4Disable = 0x527
+
+    # System Peripheral Disables -530 and 540
     ModuleAdded = 0x531
     ModuleRemoved = 0x532
+
+    # Communication Disables -550 and 560
     DialerDisabled = 0x551
     RadioTransmitterDisabled = 0x552
     RemoteUploadDownloadDisabled = 0x553
+
+    # Bypasses -570
     ZoneSensorBypass = 0x570
     FireBypass = 0x571
     AlwaysOnZoneBypass = 0x572
-    BurgBypass = 0x573
-    GroupBypass = 0x574
+    Disarm = 0x573
+    Home = 0x574
     SwingerBypass = 0x575
     AccessZoneShunt = 0x576
     AccessPointBypass = 0x577
+
+    # TEST / MISC.
+
+    # Test/Misc. -600, 610
     ManualTriggerTestReport = 0x601
     PeriodicTestReport = 0x602
     PeriodicRFTransmission = 0x603
     FireTest = 0x604
     StatusReportToFollow = 0x605
-    ListenInToFollow = 0x606
+    TwoWayVoice = 0x606
     WalkTestMode = 0x607
     PeriodicTest_SystemTroublePresent = 0x608
     VideoXmitterActive = 0x609
@@ -345,6 +405,11 @@ class ContactIDEventCode(IntEnum):
     FireZoneWalkTested = 0x614
     PanicZoneWalkTested = 0x615
     ServiceRequest = 0x616
+    MotionStop = 0x617
+    Trigger = 0x618
+    MonitorMode = 0x619
+
+    # Event Log -620
     EventLogReset = 0x621
     EventLog50PctFull = 0x622
     EventLog90PctFull = 0x623
@@ -354,15 +419,28 @@ class ContactIDEventCode(IntEnum):
     ProgramModeEntry = 0x627
     ProgramModeExit = 0x628
     Hour32EventLogMarker = 0x629
+
+    # Scheduling -630
     ScheduleChange = 0x630
     ExceptionScheduleChange = 0x631
     AccessScheduleChange = 0x632
-    SeniorWatchTrouble = 0x641
+
+    # Personnel Monitoring -640
+    InactivityAlarm = 0x641
     LatchKeySupervision = 0x642
+    DoorOpen_Monitor = 0x648
+    DoorClose_Monitor = 0x649
+
+    # Misc. -650
     ReservedForAdemcoUse = 0x651
     ReservedForAdemcoUse2 = 0x652
     ReservedForAdemcoUse3 = 0x653
     SystemInactivity = 0x654
+    SystemClear = 0x659
+
+    SwitchOnOff = 0x901
+    HighLimitOperation = 0x912
+    LowLimitOperation = 0x913
 
     @classmethod
     def has_value(cls, value):

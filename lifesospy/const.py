@@ -23,6 +23,9 @@ DC_BURGLAR = DeviceCategory('b', 'Burglar', 128)
 DC_FIRE = DeviceCategory('f', 'Fire', 64)
 DC_MEDICAL = DeviceCategory('m', 'Medical', 32)
 DC_SPECIAL = DeviceCategory('e', 'Special', 32)
-DC_ALL = OrderedDict()
-for dc in [DC_CONTROLLER, DC_BURGLAR, DC_FIRE, DC_MEDICAL, DC_SPECIAL]:
-    DC_ALL[dc.id] = dc
+DC_BASEUNIT = DeviceCategory('z', 'Base Unit', None)
+DC_ALL = [
+    DC_CONTROLLER, DC_BURGLAR, DC_FIRE, DC_MEDICAL, DC_SPECIAL, DC_BASEUNIT]
+DC_ALL_LOOKUP = OrderedDict()
+for dc in DC_ALL:
+    DC_ALL_LOOKUP[dc.id] = dc

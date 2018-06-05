@@ -58,11 +58,12 @@ async def _test_commands(client):
     response = await client.execute(GetOpModeCommand())
 
     # Iterate through all device categories and get device info
-    for dc in DC_ALL.values():
-        for index in range(0, dc.max_devices):
-            response = await client.execute(GetDeviceByIndexCommand(dc, index))
-            if isinstance(response, DeviceNotFoundResponse):
-                break
+    for dc in DC_ALL:
+        if dc.max_devices:
+            for index in range(0, dc.max_devices):
+                response = await client.execute(GetDeviceByIndexCommand(dc, index))
+                if isinstance(response, DeviceNotFoundResponse):
+                    break
 
     _LOGGER.debug("Completed test commands.")
 
