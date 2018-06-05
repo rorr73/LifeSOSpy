@@ -7,7 +7,6 @@ from lifesospy.command import *
 from lifesospy.const import *
 from lifesospy.contactid import ContactID
 from lifesospy.deviceevent import DeviceEvent
-from lifesospy.enums import *
 from lifesospy.response import Response
 
 _LOGGER = logging.getLogger(__name__)
