@@ -29,39 +29,43 @@ def main(argv):
 
     loop = asyncio.get_event_loop()
     client = Client(args.host, args.port, loop)
-    client.on_connected = _on_connected
+    client.on_connection_made = _on_connection_made
     client.on_response = _on_response
-    client.open()
-    loop.run_until_complete(_prompt_and_wait(loop))
-    client.close()
+    loop.run_until_complete(_async_run_client_and_wait(client, loop))
     loop.close()
 
-def _on_connected(client):
-    asyncio.ensure_future(_test_commands(client), loop=client.event_loop)
+async def _async_run_client_and_wait(client, loop):
+    await client.async_open()
+    print("Press [Enter] to exit...\n")
+    await loop.run_in_executor(None, sys.stdin.readline)
+    client.close()
 
-async def _test_commands(client):
+def _on_connection_made(client):
+    asyncio.ensure_future(_async_test_commands(client), loop=client.event_loop)
+
+async def _async_test_commands(client):
     _LOGGER.debug("Running test commands...")
 
     # Get the ROM Version from base unit
-    response = await client.execute(GetROMVersionCommand())
+    response = await client.async_execute(GetROMVersionCommand())
 
     # Get the current date/time from base unit
-    response = await client.execute(GetDateTimeCommand())
+    response = await client.async_execute(GetDateTimeCommand())
 
     # Set the current date/time on base unit
-    #response = await client.execute(SetDateTimeCommand())
+    #response = await client.async_execute(SetDateTimeCommand())
 
     # Clear the alarm/warning LEDs on base unit and stop siren
-    #response = await client.execute(ClearStatusCommand())
+    #response = await client.async_execute(ClearStatusCommand())
 
     # Get the current operation mode
-    response = await client.execute(GetOpModeCommand())
+    response = await client.async_execute(GetOpModeCommand())
 
     # Iterate through all device categories and get device info
     for dc in DC_ALL:
         if dc.max_devices:
             for index in range(0, dc.max_devices):
-                response = await client.execute(GetDeviceByIndexCommand(dc, index))
+                response = await client.async_execute(GetDeviceByIndexCommand(dc, index))
                 if isinstance(response, DeviceNotFoundResponse):
                     break
 
@@ -71,10 +75,6 @@ def _on_response(client, response, command):
     # To test running other clients (eg. HyperSecureLink) at same time
     if command is None:
         _LOGGER.debug("Response unsolicited: %s", response)
-
-async def _prompt_and_wait(loop):
-    print("Press [Enter] to exit...\n")
-    await loop.run_in_executor(None, sys.stdin.readline)
 
 if __name__ == "__main__":
     main(sys.argv)

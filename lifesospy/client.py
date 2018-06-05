@@ -20,20 +20,18 @@ class Client(asyncio.Protocol):
     # Default timeout to wait for a response when executing commands.
     EXECUTE_TIMEOUT_SECS = 10
 
-    # Attempt reconnection after waiting this many seconds
-    RETRY_CONNECTION_SECS = 30
-
     def __init__(self, host, port, event_loop):
         self._host = host
         self._port = port
         self._event_loop = event_loop
         self._password = ''
         self._transport = None
-        self._shutdown = False
         self._recv_buffer = ""
         self._executing = dict()
         self._time_last_data = time.time()
-        self._on_connected = None
+        self._ensure_alive_future = None
+        self._on_connection_made = None
+        self._on_connection_lost = None
         self._on_response = None
         self._on_device_event = None
         self._on_contact_id = None
@@ -69,22 +67,42 @@ class Client(asyncio.Protocol):
         self._password = password
 
     @property
-    def on_connected(self):
-        """If implemented, called after a connection has been established."""
-        return self._on_connected
+    def on_connection_made(self):
+        """If implemented, called after a connection has been made."""
+        return self._on_connection_made
 
-    @on_connected.setter
-    def on_connected(self, func):
+    @on_connection_made.setter
+    def on_connection_made(self, func):
         """
-        Define the connected callback implementation.
+        Define the connection made callback implementation.
 
         Expected signature is:
-            connected_callback(client)
+            connection_made_callback(client)
 
         client:     the client instance for this callback
         """
         with self._callback_mutex:
-            self._on_connected = func
+            self._on_connection_made = func
+
+    @property
+    def on_connection_lost(self):
+        """If implemented, called after a connection has been lost."""
+        return self._on_connection_lost
+
+    @on_connection_lost.setter
+    def on_connection_lost(self, func):
+        """
+        Define the connection lost callback implementation.
+
+        Expected signature is:
+            connection_lost_callback(client, exception)
+
+        client:     the client instance for this callback
+        exception:  an exception object if connection was aborted, or None
+                    if closed normally.
+        """
+        with self._callback_mutex:
+            self._on_connection_lost = func
 
     @property
     def on_response(self):
@@ -149,18 +167,26 @@ class Client(asyncio.Protocol):
     # METHODS - Public
     #
 
-    def open(self):
+    async def async_open(self):
         """Opens connection to the LifeSOS ethernet interface."""
-        self._shutdown = False
-        self._open()
-        asyncio.ensure_future(self._ensure_alive(), loop=self._event_loop)
+        await self._event_loop.create_connection(
+            lambda: self,
+            self._host,
+            self._port)
+
+        self._ensure_alive_future = asyncio.ensure_future(
+            self._async_ensure_alive(),
+            loop=self._event_loop)
 
     def close(self):
         """Closes connection to the LifeSOS ethernet interface."""
-        self._shutdown = True
-        self._close()
+        if self._ensure_alive_future:
+            self._ensure_alive_future.cancel()
+            self._ensure_alive_future = None
+        _LOGGER.debug("DISCONNECTED.")
+        self._transport.close()
 
-    async def execute(self, command, timeout=EXECUTE_TIMEOUT_SECS):
+    async def async_execute(self, command, timeout=EXECUTE_TIMEOUT_SECS):
         """Execute a command and return response."""
         state = {
             'command': command,
@@ -177,20 +203,10 @@ class Client(asyncio.Protocol):
     # METHODS - Private
     #
 
-    def _open(self):
-        asyncio.ensure_future(self._event_loop.create_connection(lambda: self, self._host, self._port), loop=self._event_loop)
-
-    def _reconnect(self, delay):
-        self._event_loop.call_later(delay, self._open)
-
-    def _close(self):
-        _LOGGER.debug("DISCONNECTED.")
-        self._transport.close()
-
-    async def _ensure_alive(self):
+    async def _async_ensure_alive(self):
         # Sends a no-op when nothing has been sent or received over the
         # connection for some time, to ensure it is still functional.
-        while not self._shutdown:
+        while True:
             wait = max(Client.ENSURE_ALIVE_SECS - int(time.time() - self._time_last_data), 1)
             await asyncio.sleep(wait, loop=self._event_loop)
             if (time.time() - self._time_last_data) > Client.ENSURE_ALIVE_SECS:
@@ -213,14 +229,21 @@ class Client(asyncio.Protocol):
         self._time_last_data = time.time()
 
         with self._callback_mutex:
-            if self._on_connected:
+            if self._on_connection_made:
                 with self._in_callback:
-                    self._on_connected(self)
+                    self._on_connection_made(self)
 
-    def connection_lost(self, exc):
-        if not self._shutdown:
-            _LOGGER.warning("LOST CONNECTION. Will retry in %s seconds...", Client.RETRY_CONNECTION_SECS)
-            self._reconnect(Client.RETRY_CONNECTION_SECS)
+    def connection_lost(self, ex):
+        if not ex:
+            return
+
+        _LOGGER.debug("LOST CONNECTION.")
+        self.close()
+
+        with self._callback_mutex:
+            if self._on_connection_lost:
+                with self._in_callback:
+                    self._on_connection_lost(self, ex)
 
     def data_received(self, data):
         if not data:
