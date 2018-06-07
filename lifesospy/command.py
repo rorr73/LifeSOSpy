@@ -167,3 +167,36 @@ class GetROMVersionCommand(Command):
     @property
     def action(self):
         return ACTION_GET
+
+class GetExitDelayCommand(Command):
+    """Command to get the exit delay from the LifeSOS base unit."""
+
+    @property
+    def name(self):
+        return CMD_EXIT_DELAY
+
+    @property
+    def action(self):
+        return ACTION_GET
+
+class SetExitDelayCommand(Command):
+    """Command to set the exit delay on the LifeSOS base unit."""
+
+    def __init__(self, exit_delay):
+        if exit_delay < 0x00:
+            raise ValueError("Exit delay cannot be negative.")
+        elif exit_delay > 0xff:
+            raise ValueError("Exit delay cannot exceed %s seconds.", 0xff)
+        self._exit_delay = exit_delay
+
+    @property
+    def name(self):
+        return CMD_EXIT_DELAY
+
+    @property
+    def action(self):
+        return ACTION_SET
+
+    @property
+    def args(self):
+        return self.to_ascii_hex(self._exit_delay, 2)

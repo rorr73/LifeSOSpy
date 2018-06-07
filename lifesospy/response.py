@@ -25,7 +25,8 @@ class Response(ABC):
         """Parse response into an instance of the appropriate child class."""
 
         # Trim the start and end markers, and ensure only lowercase is used
-        text = text[1:len(text)-1].lower()
+        if text.startswith(MARKER_START) and text.endswith(MARKER_END):
+            text = text[1:len(text)-1].lower()
 
         # No-op; can just ignore these
         if len(text) == 0:
@@ -55,18 +56,30 @@ class Response(ABC):
         elif text.startswith(CMD_ROMVER):
             return ROMVersionResponse(text)
 
+        elif text.startswith(CMD_EXIT_DELAY):
+            return ExitDelayResponse(text)
+
         else:
             raise ValueError("Response not recognised: " + text)
 
-    def from_ascii_hex(self, text):
-        """Converts to an int value from ASCII hex, as used by LifeSOS.
-           Unlike regular hex, it uses the first 6 characters that follow
-           numerics on the ASCII table instead of A - F."""
+    def _from_ascii_hex(self, text):
+        """Converts to an int value from both ASCII and regular hex.
+           The format used appears to vary based on whether the command was to
+           get an existing value (regular hex) or set a new value (ASCII hex
+           mirrored back from original command).
+
+           Regular hex: 0123456789abcdef
+           ASCII hex:   0123456789:;<=>?  """
         value = 0
         for index in range(0, len(text)):
-            digit = ord(text[index:index+1]) - ord('0')
-            if digit < 0x0 or digit > 0xF:
-                raise ValueError("Response contains invalid character; expected ASCII hex.")
+            char_ord = ord(text[index:index+1])
+            if char_ord in range(ord('0'), ord('?') + 1):
+                digit = char_ord - ord('0')
+            elif char_ord in range(ord('a'), ord('f') + 1):
+                digit = 0xa + (char_ord - ord('a'))
+            else:
+                raise ValueError(
+                    "Response contains invalid character.")
             value = (value * 0x10) + digit
         return value
 
@@ -383,3 +396,33 @@ class ROMVersionResponse(Response):
 
     def __str__(self):
         return "ROM version is '{0}'.".format(self._version)
+
+class ExitDelayResponse(Response):
+    """Response that provides the current exit delay on the LifeSOS base unit."""
+
+    def __init__(self, text):
+        super().__init__(text)
+        text = text[len(CMD_EXIT_DELAY):]
+        self._was_set = text.startswith(ACTION_SET)
+        if self._was_set:
+            text = text[1:]
+        self._exit_delay = self._from_ascii_hex(text)
+
+    @property
+    def command_name(self):
+        return CMD_EXIT_DELAY
+
+    @property
+    def exit_delay(self):
+        """Exit delay (in seconds) on the LifeSOS base unit."""
+        return self._exit_delay
+
+    @property
+    def was_set(self):
+        """True if exit delay was set on the base unit; otherwise, False."""
+        return self._was_set
+
+    def __str__(self):
+        return "Exit delay {0} {1} seconds.".\
+            format('is' if not self._was_set else "was set to",
+                   self._exit_delay)

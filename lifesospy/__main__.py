@@ -61,6 +61,12 @@ async def _async_test_commands(client):
     # Get the current operation mode
     response = await client.async_execute(GetOpModeCommand())
 
+    # Get the exit delay
+    response = await client.async_execute(GetExitDelayCommand())
+
+    # Set the exit delay
+    #response = await client.async_execute(SetExitDelayCommand(15))
+
     # Iterate through all device categories and get device info
     for dc in DC_ALL:
         if dc.max_devices:
