@@ -6,11 +6,19 @@ from lifesospy.enums import *
 class Response(ABC):
     """Represents response from a command issued to the LifeSOS base unit."""
 
+    def __init__(self, text):
+        self._text = text
+
     @property
     @abstractmethod
     def command_name(self):
         """Provides the command name."""
         return ''
+
+    @property
+    def text(self):
+        """The original (undecoded) response text."""
+        return self._text
 
     @staticmethod
     def parse(text):
@@ -66,6 +74,7 @@ class DateTimeResponse(Response):
     """Response that provides the current date/time on the LifeSOS base unit."""
 
     def __init__(self, text):
+        super().__init__(text)
         text = text[len(CMD_DATETIME):]
         self._was_set = text.startswith(ACTION_SET)
         if self._was_set:
@@ -97,6 +106,7 @@ class OpModeResponse(Response):
     """Response that provides the current operation mode on the LifeSOS base unit."""
 
     def __init__(self, text):
+        super().__init__(text)
         text = text[len(CMD_OPMODE):]
         self._was_set = text.startswith(ACTION_SET)
         if self._was_set:
@@ -131,6 +141,7 @@ class DeviceInfoResponse(Response):
     """Response that provides information for one of the LifeSOS devices."""
 
     def __init__(self, text):
+        super().__init__(text)
         self._command_name = text[0:2]
         self._device_category = DC_ALL_LOOKUP[text[1:2]]
         text = text[2:]
@@ -322,6 +333,7 @@ class DeviceNotFoundResponse(Response):
     """Response that indicates there was no device at specified index or zone."""
 
     def __init__(self, text):
+        super().__init__(text)
         self._command_name = text[0:2]
         self._device_category = DC_ALL_LOOKUP[text[1:2]]
 
@@ -343,7 +355,7 @@ class ClearedStatusResponse(Response):
     """Response that indicates status was cleared on base unit."""
 
     def __init__(self, text):
-        pass
+        super().__init__(text)
 
     @property
     def command_name(self):
@@ -356,6 +368,7 @@ class ROMVersionResponse(Response):
     """Response that provides the ROM version on the base unit."""
 
     def __init__(self, text):
+        super().__init__(text)
         text = text[len(CMD_ROMVER):]
         self._version = text
 
