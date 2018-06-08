@@ -49,10 +49,8 @@ async def _async_test_commands(client):
     # Get the ROM Version from base unit
     response = await client.async_execute(GetROMVersionCommand())
 
-    # Get the current date/time from base unit
+    # Get/Set the current date/time from base unit
     response = await client.async_execute(GetDateTimeCommand())
-
-    # Set the current date/time on base unit
     #response = await client.async_execute(SetDateTimeCommand())
 
     # Clear the alarm/warning LEDs on base unit and stop siren
@@ -61,11 +59,13 @@ async def _async_test_commands(client):
     # Get the current operation mode
     response = await client.async_execute(GetOpModeCommand())
 
-    # Get the exit delay
+    # Get/Set the exit delay
     response = await client.async_execute(GetExitDelayCommand())
-
-    # Set the exit delay
     #response = await client.async_execute(SetExitDelayCommand(15))
+
+    # Get/Set the entry delay
+    response = await client.async_execute(GetEntryDelayCommand())
+    #response = await client.async_execute(SetEntryDelayCommand(15))
 
     # Iterate through all device categories and get device info
     for dc in DC_ALL:

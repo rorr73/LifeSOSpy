@@ -200,3 +200,36 @@ class SetExitDelayCommand(Command):
     @property
     def args(self):
         return self.to_ascii_hex(self._exit_delay, 2)
+
+class GetEntryDelayCommand(Command):
+    """Command to get the entry delay from the LifeSOS base unit."""
+
+    @property
+    def name(self):
+        return CMD_ENTRY_DELAY
+
+    @property
+    def action(self):
+        return ACTION_GET
+
+class SetEntryDelayCommand(Command):
+    """Command to set the entry delay on the LifeSOS base unit."""
+
+    def __init__(self, entry_delay):
+        if entry_delay < 0x00:
+            raise ValueError("Entry delay cannot be negative.")
+        elif entry_delay > 0xff:
+            raise ValueError("Entry delay cannot exceed %s seconds.", 0xff)
+        self._entry_delay = entry_delay
+
+    @property
+    def name(self):
+        return CMD_ENTRY_DELAY
+
+    @property
+    def action(self):
+        return ACTION_SET
+
+    @property
+    def args(self):
+        return self.to_ascii_hex(self._entry_delay, 2)

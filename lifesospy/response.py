@@ -59,6 +59,9 @@ class Response(ABC):
         elif text.startswith(CMD_EXIT_DELAY):
             return ExitDelayResponse(text)
 
+        elif text.startswith(CMD_ENTRY_DELAY):
+            return EntryDelayResponse(text)
+
         else:
             raise ValueError("Response not recognised: " + text)
 
@@ -426,3 +429,33 @@ class ExitDelayResponse(Response):
         return "Exit delay {0} {1} seconds.".\
             format('is' if not self._was_set else "was set to",
                    self._exit_delay)
+
+class EntryDelayResponse(Response):
+    """Response that provides the current entry delay on the LifeSOS base unit."""
+
+    def __init__(self, text):
+        super().__init__(text)
+        text = text[len(CMD_ENTRY_DELAY):]
+        self._was_set = text.startswith(ACTION_SET)
+        if self._was_set:
+            text = text[1:]
+        self._entry_delay = self._from_ascii_hex(text)
+
+    @property
+    def command_name(self):
+        return CMD_ENTRY_DELAY
+
+    @property
+    def entry_delay(self):
+        """Entry delay (in seconds) on the LifeSOS base unit."""
+        return self._entry_delay
+
+    @property
+    def was_set(self):
+        """True if entry delay was set on the base unit; otherwise, False."""
+        return self._was_set
+
+    def __str__(self):
+        return "Entry delay {0} {1} seconds.".\
+            format('is' if not self._was_set else "was set to",
+                   self._entry_delay)
