@@ -186,14 +186,21 @@ class Client(asyncio.Protocol):
         _LOGGER.debug("DISCONNECTED.")
         self._transport.close()
 
-    async def async_execute(self, command, timeout=EXECUTE_TIMEOUT_SECS):
-        """Execute a command and return response."""
+    async def async_execute(self, command, password='', timeout=EXECUTE_TIMEOUT_SECS):
+        """
+        Execute a command and return response.
+
+        command:    the command instance to be executed
+        password:   if specified, will be used to execute this command (overriding any
+                    global password that may have been assigned to the client property)
+        timeout:    maximum number of seconds to wait for a response
+        """
         state = {
             'command': command,
             'event': asyncio.Event(loop=self._event_loop)}
         self._executing[command.name] = state
         try:
-            self._send(command)
+            self._send(command, password)
             await asyncio.wait_for( state['event'].wait(), timeout)
             return state['response']
         finally:
@@ -212,9 +219,11 @@ class Client(asyncio.Protocol):
             if (time.time() - self._time_last_data) > Client.ENSURE_ALIVE_SECS:
                 self._send(NoOpCommand())
 
-    def _send(self, command):
+    def _send(self, command, password=''):
+        if password == '':
+            password = self._password
         self._time_last_data = time.time()
-        command_text = command.format(self._password)
+        command_text = command.format(password)
         self._transport.write(command_text.encode('ascii'))
         _LOGGER.debug("DATA SENT: %s", command_text)
 
