@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 from lifesospy.const import *
+from lifesospy.util import *
 
 class Command(ABC):
     """Represents a command to be issued to the LifeSOS base unit."""
@@ -29,18 +30,6 @@ class Command(ABC):
             self.args + \
             password + \
             MARKER_END
-
-    def to_ascii_hex(self, value, digits):
-        """Converts an int value to ASCII hex, as used by LifeSOS.
-           Unlike regular hex, it uses the first 6 characters that follow
-           numerics on the ASCII table instead of A - F."""
-        if digits < 1:
-            return ''
-        text = ''
-        for index in range(0, digits):
-            text = chr(ord('0') + (value % 0x10)) + text
-            value //= 0x10
-        return text
 
 class NoOpCommand(Command):
     """Command that does nothing."""
@@ -128,7 +117,7 @@ class GetDeviceByIndexCommand(Command):
 
     @property
     def args(self):
-        return self.to_ascii_hex(self._index, 2)
+        return to_ascii_hex(self._index, 2)
 
 class GetDeviceByZoneCommand(Command):
     """Get a device (by zone) for specified category from the LifeSOS base unit."""
@@ -199,7 +188,7 @@ class SetExitDelayCommand(Command):
 
     @property
     def args(self):
-        return self.to_ascii_hex(self._exit_delay, 2)
+        return to_ascii_hex(self._exit_delay, 2)
 
 class GetEntryDelayCommand(Command):
     """Command to get the entry delay from the LifeSOS base unit."""
@@ -232,4 +221,37 @@ class SetEntryDelayCommand(Command):
 
     @property
     def args(self):
-        return self.to_ascii_hex(self._entry_delay, 2)
+        return to_ascii_hex(self._entry_delay, 2)
+
+class GetSwitchCommand(Command):
+    """Command to get the state of a switch."""
+
+    def __init__(self, switch_number):
+        self._switch_number = switch_number
+
+    @property
+    def name(self):
+        return CMD_SWITCH_PREFIX + to_ascii_hex(self._switch_number.value, 1)
+
+    @property
+    def action(self):
+        return ACTION_GET
+
+class SetSwitchCommand(Command):
+    """Command to set the state of a switch."""
+
+    def __init__(self, switch_number, switch_state):
+        self._switch_number = switch_number
+        self._switch_state = switch_state
+
+    @property
+    def name(self):
+        return CMD_SWITCH_PREFIX + to_ascii_hex(self._switch_number.value, 1)
+
+    @property
+    def action(self):
+        return ACTION_SET
+
+    @property
+    def args(self):
+        return to_ascii_hex(self._switch_state, 1)

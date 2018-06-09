@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from lifesospy.const import *
 from lifesospy.enums import *
+from lifesospy.util import *
 
 class Response(ABC):
     """Represents response from a command issued to the LifeSOS base unit."""
@@ -62,29 +63,11 @@ class Response(ABC):
         elif text.startswith(CMD_ENTRY_DELAY):
             return EntryDelayResponse(text)
 
+        elif text.startswith(CMD_SWITCH_PREFIX) and SwitchNumber.has_value(from_ascii_hex(text[1:2])):
+            return SwitchResponse(text)
+
         else:
             raise ValueError("Response not recognised: " + text)
-
-    def _from_ascii_hex(self, text):
-        """Converts to an int value from both ASCII and regular hex.
-           The format used appears to vary based on whether the command was to
-           get an existing value (regular hex) or set a new value (ASCII hex
-           mirrored back from original command).
-
-           Regular hex: 0123456789abcdef
-           ASCII hex:   0123456789:;<=>?  """
-        value = 0
-        for index in range(0, len(text)):
-            char_ord = ord(text[index:index+1])
-            if char_ord in range(ord('0'), ord('?') + 1):
-                digit = char_ord - ord('0')
-            elif char_ord in range(ord('a'), ord('f') + 1):
-                digit = 0xa + (char_ord - ord('a'))
-            else:
-                raise ValueError(
-                    "Response contains invalid character.")
-            value = (value * 0x10) + digit
-        return value
 
 class DateTimeResponse(Response):
     """Response that provides the current date/time on the LifeSOS base unit."""
@@ -409,7 +392,7 @@ class ExitDelayResponse(Response):
         self._was_set = text.startswith(ACTION_SET)
         if self._was_set:
             text = text[1:]
-        self._exit_delay = self._from_ascii_hex(text)
+        self._exit_delay = from_ascii_hex(text)
 
     @property
     def command_name(self):
@@ -439,7 +422,7 @@ class EntryDelayResponse(Response):
         self._was_set = text.startswith(ACTION_SET)
         if self._was_set:
             text = text[1:]
-        self._entry_delay = self._from_ascii_hex(text)
+        self._entry_delay = from_ascii_hex(text)
 
     @property
     def command_name(self):
@@ -459,3 +442,54 @@ class EntryDelayResponse(Response):
         return "Entry delay {0} {1} seconds.".\
             format('is' if not self._was_set else "was set to",
                    self._entry_delay)
+
+class SwitchResponse(Response):
+    """Response that provides the state of a switch on the LifeSOS base unit."""
+
+    def __init__(self, text):
+        super().__init__(text)
+        self._switch_number = SwitchNumber(from_ascii_hex(text[1:2]))
+        text = text[2:]
+        self._was_set = text.startswith(ACTION_SET)
+        if self._was_set:
+            text = text[1:]
+        self._switch_state = SwitchState(from_ascii_hex(text[0:1]))
+
+        # This is just a guess. Couldn't get switches to work on my LS-30
+        # (rom version '02.4201/13/06'), so perhaps the 'no' means an
+        # error occurred / unsupported by base unit
+        if text[1:3] == 'no':
+            self._error = True
+        else:
+            self._error = False
+
+    @property
+    def command_name(self):
+        return CMD_SWITCH_PREFIX + to_ascii_hex(self._switch_number.value, 1)
+
+    @property
+    def switch_number(self):
+        """Switch number on the LifeSOS base unit."""
+        return self._switch_number
+
+    @property
+    def switch_state(self):
+        """Switch state."""
+        return self._switch_state
+
+    @property
+    def error(self):
+        """Indicates if base unit reported an error when setting switch state."""
+        return self._error
+
+    @property
+    def was_set(self):
+        """True if switch state was set on the base unit; otherwise, False."""
+        return self._was_set
+
+    def __str__(self):
+        return "Switch {0} {1} {2}{3}.".\
+            format(self._switch_number.name,
+                   'is' if not self._was_set else "was set to",
+                   self._switch_state.name,
+                   '' if not self._error else " [ERROR]")

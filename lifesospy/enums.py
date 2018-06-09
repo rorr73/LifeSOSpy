@@ -445,3 +445,35 @@ class ContactIDEventCode(IntEnum):
     @classmethod
     def has_value(cls, value):
         return any(value == item.value for item in cls)
+
+class SwitchNumber(IntEnum):
+    """Identifier for the switch number."""
+    SW01 = 0x6
+    SW02 = 0x7
+    SW03 = 0x4
+    SW04 = 0x5
+    SW05 = 0x8
+    SW06 = 0x9
+    SW07 = 0xa
+    SW08 = 0xb
+    SW09 = 0xe
+    SW10 = 0xf
+    SW11 = 0xc
+    SW12 = 0xd
+    SW13 = 0x0
+    SW14 = 0x1
+    SW15 = 0x2
+    SW16 = 0x3
+
+    @classmethod
+    def has_value(cls, value):
+        return any(value == item.value for item in cls)
+
+class SwitchState(IntEnum):
+    """State of a switch."""
+    On = 0x4
+    Off = 0xc
+
+    @classmethod
+    def has_value(cls, value):
+        return any(value == item.value for item in cls)

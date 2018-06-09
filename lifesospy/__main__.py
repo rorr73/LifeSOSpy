@@ -67,6 +67,10 @@ async def _async_test_commands(client):
     response = await client.async_execute(GetEntryDelayCommand())
     #response = await client.async_execute(SetEntryDelayCommand(15))
 
+    # Get the switches
+    #for switch_number in SwitchNumber:
+    #    response = await client.async_execute(GetSwitchCommand(switch_number))
+
     # Iterate through all device categories and get device info
     for dc in DC_ALL:
         if dc.max_devices:

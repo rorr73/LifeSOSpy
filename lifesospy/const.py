@@ -14,6 +14,7 @@ CMD_ENTRY_DELAY = 'l1'
 CMD_EXIT_DELAY = 'l0'
 CMD_OPMODE = 'n0'
 CMD_ROMVER = 'vn'
+CMD_SWITCH_PREFIX = 's'
 
 # Actions that can be performed by a command
 ACTION_GET = '?'
