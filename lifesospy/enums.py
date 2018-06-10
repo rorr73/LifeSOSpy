@@ -448,7 +448,7 @@ class ContactIDEventCode(IntEnum):
 
     @classmethod
     def is_alarm(cls, value):
-        return value >= 0x100 and value <= 0x1ff
+        return int(value) >= 0x100 and int(value) <= 0x1ff
 
 class SwitchNumber(IntEnum):
     """Identifier for the switch number."""
