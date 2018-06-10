@@ -60,8 +60,8 @@ class DeviceEventCode(IntEnum):
     Disarm = 0x0a14
     Home = 0x0a18
     Heartbeat = 0x0a20
-    NewBattery = 0x0a2a
-    LowBattery = 0x0a30
+    PowerOnReset = 0x0a2a
+    BatteryLow = 0x0a30
     Open = 0x0a40
     Close = 0x0a48
     Tamper = 0x0a50
@@ -445,6 +445,10 @@ class ContactIDEventCode(IntEnum):
     @classmethod
     def has_value(cls, value):
         return any(value == item.value for item in cls)
+
+    @classmethod
+    def is_alarm(cls, value):
+        return value >= 0x100 and value <= 0x1ff
 
 class SwitchNumber(IntEnum):
     """Identifier for the switch number."""
