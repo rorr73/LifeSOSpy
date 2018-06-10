@@ -18,7 +18,7 @@ class Client(asyncio.Protocol):
     ENSURE_ALIVE_SECS = 30
 
     # Default timeout to wait for a response when executing commands.
-    EXECUTE_TIMEOUT_SECS = 10
+    EXECUTE_TIMEOUT_SECS = 6
 
     def __init__(self, host, port, event_loop):
         self._host = host
@@ -37,6 +37,7 @@ class Client(asyncio.Protocol):
         self._on_contact_id = None
         self._in_callback = threading.Lock()
         self._callback_mutex = threading.RLock()
+        self._execute_mutex = threading.Lock()
 
     #
     # PROPERTIES
@@ -200,8 +201,9 @@ class Client(asyncio.Protocol):
             'event': asyncio.Event(loop=self._event_loop)}
         self._executing[command.name] = state
         try:
-            self._send(command, password)
-            await asyncio.wait_for( state['event'].wait(), timeout)
+            with self._execute_mutex:
+                self._send(command, password)
+                await asyncio.wait_for(state['event'].wait(), timeout)
             return state['response']
         finally:
             self._executing[command.name] = None
