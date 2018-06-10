@@ -80,7 +80,7 @@ class DateTimeResponse(Response):
             text = text[1:]
         if len(text) != 11:
             raise ValueError("Date/Time response length is invalid.")
-        self._remote_datetime = datetime.strptime(text, '%y%m%d%w%H%M')
+        self._remote_datetime = datetime.strptime(text[0:6] + text[7:11], '%y%m%d%H%M')
 
     @property
     def command_name(self):
