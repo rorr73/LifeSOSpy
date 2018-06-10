@@ -446,10 +446,6 @@ class ContactIDEventCode(IntEnum):
     def has_value(cls, value):
         return any(value == item.value for item in cls)
 
-    @classmethod
-    def is_alarm(cls, value):
-        return int(value) >= 0x100 and int(value) <= 0x1ff
-
 class SwitchNumber(IntEnum):
     """Identifier for the switch number."""
     SW01 = 0x6
