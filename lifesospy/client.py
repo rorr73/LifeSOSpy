@@ -37,7 +37,6 @@ class Client(asyncio.Protocol):
         self._on_contact_id = None
         self._in_callback = threading.Lock()
         self._callback_mutex = threading.RLock()
-        self._execute_mutex = threading.Lock()
 
     #
     # PROPERTIES
@@ -201,9 +200,8 @@ class Client(asyncio.Protocol):
             'event': asyncio.Event(loop=self._event_loop)}
         self._executing[command.name] = state
         try:
-            with self._execute_mutex:
-                self._send(command, password)
-                await asyncio.wait_for(state['event'].wait(), timeout)
+            self._send(command, password)
+            await asyncio.wait_for(state['event'].wait(), timeout)
             return state['response']
         finally:
             self._executing[command.name] = None
