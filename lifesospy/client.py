@@ -225,7 +225,8 @@ class Client(asyncio.Protocol):
         self._time_last_data = time.time()
         command_text = command.format(password)
         self._transport.write(command_text.encode('ascii'))
-        _LOGGER.debug("DATA SENT: %s", command_text)
+        command_hidepwd = command.format(''.ljust(len(password), '*'))
+        _LOGGER.debug("DATA SENT: %s", command_hidepwd)
 
     #
     # METHODS - Protocol overrides
