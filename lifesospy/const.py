@@ -32,3 +32,7 @@ DC_ALL = [
 DC_ALL_LOOKUP = OrderedDict()
 for dc in DC_ALL:
     DC_ALL_LOOKUP[dc.id] = dc
+
+# Message attributes
+MA_TX3AC_10A = 0x01
+MA_TX3AC_100A = 0x02

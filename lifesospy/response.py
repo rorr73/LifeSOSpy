@@ -155,7 +155,7 @@ class DeviceInfoResponse(Response):
         else:
             self._device_type = None
         self._device_id = int(text[2:8], 16)
-        self._ma = int(text[8:10], 16)
+        self._message_attribute = int(text[8:10], 16)
         self._device_char = DCFlags(int(text[10:12], 16))
         # self._?? = int(text[12:14], 16)
         self._group_number = int(text[14:16], 16)
@@ -167,9 +167,9 @@ class DeviceInfoResponse(Response):
 
         # Remaining fields used by the 'Special' category of devices
         if len(text) > 30:
-            self._current_reading = int(text[30:32], 16)
-            self._alarm_high_limit = int(text[32:34], 16)
-            self._alarm_low_limit = int(text[34:36], 16)
+            self._current_reading = self._apply_ma_to_ss_value(int(text[30:32], 16))
+            self._alarm_high_limit = self._apply_ma_to_ss_value(int(text[32:34], 16))
+            self._alarm_low_limit = self._apply_ma_to_ss_value(int(text[34:36], 16))
             self._special_status = SSFlags(int(text[36:38], 16))
         else:
             self._current_reading = None
@@ -177,8 +177,8 @@ class DeviceInfoResponse(Response):
             self._alarm_low_limit = None
             self._special_status = None
         if len(text) > 38:
-            self._control_high_limit = int(text[38:40], 16)
-            self._control_low_limit = int(text[40:42], 16)
+            self._control_high_limit = self._apply_ma_to_ss_value(int(text[38:40], 16))
+            self._control_low_limit = self._apply_ma_to_ss_value(int(text[40:42], 16))
         else:
             self._control_high_limit = None
             self._control_low_limit = None
@@ -214,9 +214,9 @@ class DeviceInfoResponse(Response):
         return self._device_id
 
     @property
-    def ma(self):
+    def message_attribute(self):
         """For AC Power Meter; 01 for 10 Amp range, 02 for 100 Amp range."""
-        return self._ma
+        return self._message_attribute
 
     @property
     def device_char(self):
@@ -327,6 +327,26 @@ class DeviceInfoResponse(Response):
                    '' if self._device_type_value != DeviceType.DoorMagnet else ", IsClosed={0}".format(self.is_closed),
                    str(self._device_char),
                    str(self._enable_status))
+
+    def _apply_ma_to_ss_value(self, value):
+        # Message attribute dictates how to determine the limit values
+        if self._message_attribute == MA_TX3AC_100A:
+            if value == 0xfe:
+                return None
+            else:
+                return value
+        elif self._message_attribute == MA_TX3AC_10A:
+            if value == 0xfe:
+                return None
+            else:
+                return value / 10
+        else:
+            if value == 0x80:
+                return None
+            elif value >= 0x80:
+                return 0 - (0x100 - value)
+            else:
+                return value
 
 class DeviceNotFoundResponse(Response):
     """Response that indicates there was no device at specified index or zone."""

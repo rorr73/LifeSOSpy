@@ -11,7 +11,7 @@ class DeviceEvent(object):
         self._event_code_value = int(text[7:11], 16)
         self._device_type_value = int(text[11:13], 16)
         self._device_id = int(text[13:19], 16)
-        self._ma = int(text[19:21], 16)
+        self._message_attribute = int(text[19:21], 16)
         self._device_char = DCFlags(int(text[21:23], 16))
         self._current_status = int(text[23:25], 16)
         # self._?? = int(text[25:27], 16)
@@ -53,9 +53,9 @@ class DeviceEvent(object):
         return self._device_id
 
     @property
-    def ma(self):
-        """For AC Power Meter; 01 for 10 Amp range, 02 for 100 Amp range."""
-        return self._ma
+    def message_attribute(self):
+        """Message Attribute."""
+        return self._message_attribute
 
     @property
     def device_char(self):
