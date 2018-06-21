@@ -1,78 +1,82 @@
 import asyncio
 import logging
-import threading
 import time
 
+from lifesospy.asynchelper import AsyncHelper
 from lifesospy.command import *
 from lifesospy.const import *
 from lifesospy.contactid import ContactID
 from lifesospy.deviceevent import DeviceEvent
-from lifesospy.response import Response
+from lifesospy.response import Response, DeviceInfoResponse
+from typing import Callable, Dict, Any
 
 _LOGGER = logging.getLogger(__name__)
 
-class Client(asyncio.Protocol):
-    """Provides connectivity to the LifeSOS ethernet interface."""
+
+class Client(asyncio.Protocol, AsyncHelper):
+    """
+    Provides connectivity to the LifeSOS ethernet interface.
+
+    Your application can either use this class for direct access to LifeSOS,
+    or use the BaseUnit class to provide management / higher level access.
+    """
 
     # Ensure connection still alive when no data sent/recieved after this many seconds
     ENSURE_ALIVE_SECS = 30
 
-    # Default timeout to wait for a response when executing commands.
-    EXECUTE_TIMEOUT_SECS = 6
+    # Default timeout to wait for a response when executing commands
+    EXECUTE_TIMEOUT_SECS = 10
 
-    def __init__(self, host, port, event_loop):
+    def __init__(self, host: str, port: int, event_loop: asyncio.AbstractEventLoop):
+        AsyncHelper.__init__(self, event_loop)
         self._host = host
         self._port = port
-        self._event_loop = event_loop
         self._password = ''
         self._transport = None
         self._recv_buffer = ""
         self._executing = dict()
         self._time_last_data = time.time()
-        self._ensure_alive_future = None
+
         self._on_connection_made = None
         self._on_connection_lost = None
         self._on_response = None
         self._on_device_event = None
         self._on_contact_id = None
-        self._in_callback = threading.Lock()
-        self._callback_mutex = threading.RLock()
 
     #
     # PROPERTIES
     #
 
     @property
-    def host(self):
+    def host(self) -> str:
         """Host name or IP address for the LifeSOS ethernet interface."""
         return self._host
 
     @property
-    def port(self):
-        """Port number for the LifeSOS ethernet interface."""
-        return self._port
-
-    @property
-    def event_loop(self):
-        """Event loop for asyncio."""
-        return self._event_loop
-
-    @property
-    def password(self):
+    def password(self) -> str:
         """Control password, if one has been assigned on the base unit."""
         return self._password
 
     @password.setter
-    def password(self, password):
+    def password(self, password: str) -> None:
         self._password = password
 
     @property
-    def on_connection_made(self):
+    def port(self) -> int:
+        """Port number for the LifeSOS ethernet interface."""
+        return self._port
+
+    #
+    # EVENTS
+    #
+
+    @property
+    def on_connection_made(self) -> Callable[['Client'], None]:
         """If implemented, called after a connection has been made."""
         return self._on_connection_made
 
     @on_connection_made.setter
-    def on_connection_made(self, func):
+    def on_connection_made(self, func: Callable[['Client'], None]) -> None:
         """
         Define the connection made callback implementation.
 
@@ -81,16 +85,15 @@ class Client(asyncio.Protocol):
 
         client:     the client instance for this callback
         """
-        with self._callback_mutex:
-            self._on_connection_made = func
+        self._on_connection_made = func
 
     @property
-    def on_connection_lost(self):
+    def on_connection_lost(self) -> Callable[['Client'], None]:
         """If implemented, called after a connection has been lost."""
         return self._on_connection_lost
 
     @on_connection_lost.setter
-    def on_connection_lost(self, func):
+    def on_connection_lost(self, func: Callable[['Client', Exception], None]) -> None:
         """
         Define the connection lost callback implementation.
 
@@ -101,16 +104,15 @@ class Client(asyncio.Protocol):
         exception:  an exception object if connection was aborted, or None
                     if closed normally.
         """
-        with self._callback_mutex:
-            self._on_connection_lost = func
+        self._on_connection_lost = func
 
     @property
-    def on_response(self):
+    def on_response(self) -> Callable[['Client', Response, Command], None]:
         """If implemented, called when a response has been received."""
         return self._on_response
 
     @on_response.setter
-    def on_response(self, func):
+    def on_response(self, func: Callable[['Client', Response, Command], None]) -> None:
         """
         Define the response callback implementation.
 
@@ -122,16 +124,15 @@ class Client(asyncio.Protocol):
         command:    the command instance specified on call to execute method,
                     or None if response due to a command from another client
         """
-        with self._callback_mutex:
-            self._on_response = func
+        self._on_response = func
 
     @property
-    def on_device_event(self):
+    def on_device_event(self) -> Callable[['Client', DeviceEvent], None]:
         """If implemented, called when a device event has been received."""
         return self._on_device_event
 
     @on_device_event.setter
-    def on_device_event(self, func):
+    def on_device_event(self, func: Callable[['Client', DeviceEvent], None]) -> None:
         """
         Define the device event callback implementation.
 
@@ -141,16 +142,15 @@ class Client(asyncio.Protocol):
         client:         the client instance for this callback
         device_event:   info for the device event
         """
-        with self._callback_mutex:
-            self._on_device_event = func
+        self._on_device_event = func
 
     @property
-    def on_contact_id(self):
+    def on_contact_id(self) -> Callable[['Client', ContactID], None]:
         """If implemented, called when a ContactID message has been received."""
         return self._on_contact_id
 
     @on_contact_id.setter
-    def on_contact_id(self, func):
+    def on_contact_id(self, func: Callable[['Client', ContactID], None]) -> None:
         """
         Define the ContactID event callback implementation.
 
@@ -160,33 +160,33 @@ class Client(asyncio.Protocol):
         client:         the client instance for this callback
         contact_id:     message using the Ademco ® Contact ID protocol.
         """
-        with self._callback_mutex:
-            self._on_contact_id = func
+        self._on_contact_id = func
 
     #
     # METHODS - Public
     #
 
-    async def async_open(self):
+    async def async_open(self) -> None:
         """Opens connection to the LifeSOS ethernet interface."""
-        await self._event_loop.create_connection(
+
+        await self._loop.create_connection(
             lambda: self,
             self._host,
             self._port)
 
-        self._ensure_alive_future = asyncio.ensure_future(
-            self._async_ensure_alive(),
-            loop=self._event_loop)
+        # Create task to ensure connection is alive
+        self.create_task(self._async_ensure_alive, Client.ENSURE_ALIVE_SECS)
 
-    def close(self):
+    def close(self) -> None:
         """Closes connection to the LifeSOS ethernet interface."""
-        if self._ensure_alive_future:
-            self._ensure_alive_future.cancel()
-            self._ensure_alive_future = None
-        _LOGGER.debug("DISCONNECTED.")
+
+        self.cancel_pending_tasks()
+
+        _LOGGER.debug("Disconnected")
         self._transport.close()
 
-    async def async_execute(self, command, password='', timeout=EXECUTE_TIMEOUT_SECS):
+    async def async_execute(self, command: Command, password: str = '',
+                            timeout: int = EXECUTE_TIMEOUT_SECS) -> Response:
         """
         Execute a command and return response.
 
@@ -195,9 +195,9 @@ class Client(asyncio.Protocol):
                     global password that may have been assigned to the client property)
         timeout:    maximum number of seconds to wait for a response
         """
-        state = {
+        state: Dict[str, Any] = {
             'command': command,
-            'event': asyncio.Event(loop=self._event_loop)}
+            'event': asyncio.Event(loop=self._loop)}
         self._executing[command.name] = state
         try:
             self._send(command, password)
@@ -207,53 +207,53 @@ class Client(asyncio.Protocol):
             self._executing[command.name] = None
 
     #
-    # METHODS - Private
+    # METHODS - Private / Internal
     #
 
-    async def _async_ensure_alive(self):
+    async def _async_ensure_alive(self, interval: int) -> None:
         # Sends a no-op when nothing has been sent or received over the
         # connection for some time, to ensure it is still functional.
         while True:
-            wait = max(Client.ENSURE_ALIVE_SECS - int(time.time() - self._time_last_data), 1)
-            await asyncio.sleep(wait, loop=self._event_loop)
-            if (time.time() - self._time_last_data) > Client.ENSURE_ALIVE_SECS:
+            wait = max(interval - int(time.time() - self._time_last_data), 1)
+            await asyncio.sleep(wait, loop=self._loop)
+            if (time.time() - self._time_last_data) > interval:
                 self._send(NoOpCommand())
 
-    def _send(self, command, password=''):
+    def _send(self, command: Command, password: str = '') -> None:
+        # When no password specified on this call, use global password
         if password == '':
             password = self._password
+
+        # Update data transfer timestamp
         self._time_last_data = time.time()
+
+        # Write command to the stream
         command_text = command.format(password)
         self._transport.write(command_text.encode('ascii'))
-        command_hidepwd = command.format(''.ljust(len(password), '*'))
-        _LOGGER.debug("DATA SENT: %s", command_hidepwd)
 
-    #
-    # METHODS - Protocol overrides
-    #
+        # Log data sent for diagnostics (hide the password though)
+        command_hidepwd = command.format(''.ljust(len(password), '*'))
+        _LOGGER.debug("DataSent: %s", command_hidepwd)
 
     def connection_made(self, transport):
-        _LOGGER.debug("CONNECTED.")
+        _LOGGER.debug("Connected")
         self._transport = transport
         self._recv_buffer = ""
         self._time_last_data = time.time()
 
-        with self._callback_mutex:
-            if self._on_connection_made:
-                with self._in_callback:
-                    self._on_connection_made(self)
+        if self._on_connection_made:
+            self._on_connection_made(self)
 
     def connection_lost(self, ex):
         if not ex:
             return
 
-        _LOGGER.debug("LOST CONNECTION.")
-        self.close()
+        _LOGGER.debug("ConnectionLost")
+        self.cancel_pending_tasks()
+        self._transport.close()
 
-        with self._callback_mutex:
-            if self._on_connection_lost:
-                with self._in_callback:
-                    self._on_connection_lost(self, ex)
+        if self._on_connection_lost:
+            self._on_connection_lost(self, ex)
 
     def data_received(self, data):
         if not data:
@@ -268,9 +268,9 @@ class Client(asyncio.Protocol):
         try:
             recv_chars = data.decode('ascii')
         except UnicodeDecodeError as ex:
-            _LOGGER.error("DATA RCVD: Data has bytes that cannot be decoded to ASCII: %s", data)
+            _LOGGER.error("DataReceived: Data has bytes that cannot be decoded to ASCII: %s", data)
             return
-        _LOGGER.debug("DATA RCVD: %s", recv_chars.replace('\n','\\n').replace('\r','\\r'))
+        _LOGGER.debug("DataReceived: %s", recv_chars.replace('\n','\\n').replace('\r','\\r'))
 
         # Data received will have CR/LF somewhat randomly at either the start or end
         # of each message. To deal with this, we'll append it to a running buffer and then
@@ -294,11 +294,11 @@ class Client(asyncio.Protocol):
             if line.startswith(MARKER_START) and line.endswith(MARKER_END):
                 try:
                     response = Response.parse(line)
-                except Exception as ex:
-                    _LOGGER.warning(ex)
+                except Exception:
+                    _LOGGER.error("Failed to parse response", exc_info=True)
                     continue
                 if response:
-                    _LOGGER.debug("RESPONSE: %s", response)
+                    _LOGGER.debug(response)
                     state = self._executing.get(response.command_name)
                     if state:
                         command = state['command']
@@ -307,27 +307,25 @@ class Client(asyncio.Protocol):
                     else:
                         command = None
 
-                    with self._callback_mutex:
-                        if self._on_response:
-                            with self._in_callback:
-                                self._on_response(self, response, command)
+                    if self._on_response:
+                        self._on_response(self, response, command)
 
             # Handle device events; eg. sensor triggered, low battery, etc...
             elif line.startswith('MINPIC='):
                 try:
                     device_event = DeviceEvent(line)
-                except Exception as ex:
-                    _LOGGER.warning(ex)
+                except Exception:
+                    _LOGGER.error("Failed to parse device event", exc_info=True)
                     continue
-                _LOGGER.debug("EVENT: %s", device_event)
+                _LOGGER.debug(device_event)
 
-                with self._callback_mutex:
-                    if self._on_device_event:
-                        with self._in_callback:
-                            self._on_device_event(self, device_event)
+                if self._on_device_event:
+                    self._on_device_event(self, device_event)
 
-            # Not really sure what these are; appear to be events generated
-            # periodically by base unit. Will ignore for now.
+            # Events from devices that haven't been enrolled, as well as a
+            # periodic base unit event that appears to provide id of last
+            # enrolled device to raise an event. Will just ignore these for
+            # now, since I can't think of any use for them.
             elif line.startswith('XINPIC='):
                 continue
 
@@ -335,15 +333,13 @@ class Client(asyncio.Protocol):
             elif line.startswith('(') and line.endswith(')'):
                 try:
                     contact_id = ContactID(line[1:len(line)-1])
-                except Exception as ex:
-                    _LOGGER.warning(ex)
+                except Exception:
+                    _LOGGER.error("Failed to parse ContactID", exc_info=True)
                     continue
-                _LOGGER.debug("CONTACTID: %s", contact_id)
+                _LOGGER.debug(contact_id)
 
-                with self._callback_mutex:
-                    if self._on_contact_id:
-                        with self._in_callback:
-                            self._on_contact_id(self, contact_id)
+                if self._on_contact_id:
+                    self._on_contact_id(self, contact_id)
 
             # Any unrecognised messages; ignore them too...
             else:

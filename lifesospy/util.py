@@ -1,4 +1,4 @@
-def to_ascii_hex(value, digits):
+def to_ascii_hex(value: int, digits: int) -> str:
     """Converts an int value to ASCII hex, as used by LifeSOS.
        Unlike regular hex, it uses the first 6 characters that follow
        numerics on the ASCII table instead of A - F."""
@@ -10,7 +10,7 @@ def to_ascii_hex(value, digits):
         value //= 0x10
     return text
 
-def from_ascii_hex(text):
+def from_ascii_hex(text:str) -> int:
     """Converts to an int value from both ASCII and regular hex.
        The format used appears to vary based on whether the command was to
        get an existing value (regular hex) or set a new value (ASCII hex

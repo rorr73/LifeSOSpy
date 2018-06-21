@@ -2,21 +2,24 @@ import argparse
 import asyncio
 import logging
 import sys
+import traceback
 
-from lifesospy.client import Client
-from lifesospy.command import *
+from lifesospy.baseunit import BaseUnit
 from lifesospy.const import *
-from lifesospy.response import *
+from lifesospy.devicecategory import *
+from lifesospy.enums import *
 
 _LOGGER = logging.getLogger(__name__)
 
-def main(argv):
-    """Simple runnable command line script to test library."""
 
-    logging.basicConfig(level=logging.DEBUG)
+def main(argv):
+    """
+    Basic command line script for testing library.
+    """
 
     parser = argparse.ArgumentParser(
-        description="LifeSOSpy: Provides connectivity to a LifeSOS alarm system.")
+        description="LifeSOSpy v{} - {}".format(
+            PROJECT_VERSION, PROJECT_DESCRIPTION))
     parser.add_argument(
         '-H', '--host',
         help="Hostname/IP Address for the LifeSOS ethernet interface.",
@@ -25,66 +28,292 @@ def main(argv):
         '-P', '--port',
         help="TCP port for the LifeSOS ethernet interface.",
         default='1680')
+    parser.add_argument(
+        '-p', '--password',
+        help="Password for the Master user, if remote access requires it.",
+        default='')
+    parser.add_argument(
+        '-v', '--verbose',
+        help="Display all logging output.",
+        action='store_true')
     args = parser.parse_args()
 
+    logging.basicConfig(
+        format="%(asctime)s %(levelname)-5s (%(threadName)s) [%(name)s] %(message)s",
+        datefmt='%Y-%m-%d %H:%M:%S',
+        level=logging.DEBUG if args.verbose else logging.INFO)
+
+    print("LifeSOSpy v{} - {}\n".format(PROJECT_VERSION, PROJECT_DESCRIPTION))
+
     loop = asyncio.get_event_loop()
-    client = Client(args.host, args.port, loop)
-    client.on_connection_made = _on_connection_made
-    client.on_response = _on_response
-    loop.run_until_complete(_async_run_client_and_wait(client, loop))
+    baseunit = BaseUnit(args.host, args.port, loop)
+    if len(args.password) > 0:
+        baseunit.password = args.password
+    baseunit.start()
+    loop.run_until_complete(_async_wait(baseunit, loop))
+    baseunit.stop()
     loop.close()
 
-async def _async_run_client_and_wait(client, loop):
-    await client.async_open()
-    print("Press [Enter] to exit...\n")
-    await loop.run_in_executor(None, sys.stdin.readline)
-    client.close()
 
-def _on_connection_made(client):
-    asyncio.ensure_future(_async_test_commands(client), loop=client.event_loop)
+async def _async_wait(baseunit: BaseUnit,
+                      loop: asyncio.AbstractEventLoop) -> None:
+    # Prompt for test commands / do blocking on a threadpool thread
+    await loop.run_in_executor(None,
+                               _handle_interactive_baseunit_tests,
+                               baseunit, loop)
 
-async def _async_test_commands(client):
-    _LOGGER.debug("Running test commands...")
 
-    # Get the ROM Version from base unit
-    response = await client.async_execute(GetROMVersionCommand())
+def _handle_interactive_baseunit_tests(
+        baseunit: BaseUnit, loop: asyncio.AbstractEventLoop) -> None:
+    help = (
+        "Test commands available:\n"
+        "'exit' - exit this application\n"
+        "'help' - display this list of available commands\n"
+        "'devices' - list all discovered devices\n"
+        "'disarm' - set Disarm mode\n"
+        "'home' - set Home mode\n"
+        "'away' - set Away mode\n"
+        "'monitor' - set Monitor mode\n"
+        "'clear' - clear status LEDs and stop siren\n"
+        "'setdatetime' - set remote date/time to match local\n"
+        "'sw##' - toggle switch; ## must be between 01 and 16\n"
+        "'add X' - add new device for category X (one of c/b/f/m/e)\n"
+        "'change ID G U ES SW' - change device settings, where ID is 6 char hex \n"
+        "                        device id, G = group#, U = unit#, ES = enable \n"
+        "                        status flags, SW = switch flags\n"
+        "'delete ID' - delete device, where ID is 6 char hex device id\n"
+        "'eventlog (#)' - get event log, optionally get only # most recent\n"
+        "'sensorlog (#)' - get sensor log, optionally get only # most recent")
+    print(help)
+    while True:
+        line = sys.stdin.readline().strip().lower()
 
-    # Get/Set the current date/time from base unit
-    response = await client.async_execute(GetDateTimeCommand())
-    #response = await client.async_execute(SetDateTimeCommand())
+        # Exit test app
+        if line == 'exit':
+            break
 
-    # Clear the alarm/warning LEDs on base unit and stop siren
-    #response = await client.async_execute(ClearStatusCommand())
+        # Display list of available commands and the arguments required
+        elif line == 'help':
+            print(help)
 
-    # Get the current operation mode
-    response = await client.async_execute(GetOpModeCommand())
+        # Print all enrolled devices
+        elif line == 'devices':
+            for device in baseunit.devices:
+                print(device)
 
-    # Get/Set the exit delay
-    response = await client.async_execute(GetExitDelayCommand())
-    #response = await client.async_execute(SetExitDelayCommand(15))
+        # Set operation mode
+        elif line in (str(op.name).lower() for op in OperationMode):
+            async def async_set_operation_mode(operation_mode: OperationMode):
+                try:
+                    await baseunit.async_set_operation_mode(operation_mode)
+                    print("Operation mode was set to {}.".format(operation_mode.name))
+                except Exception:
+                    traceback.print_exc()
 
-    # Get/Set the entry delay
-    response = await client.async_execute(GetEntryDelayCommand())
-    #response = await client.async_execute(SetEntryDelayCommand(15))
+            operation_mode = next(op for op in OperationMode if str(op.name).lower() == line)
+            asyncio.run_coroutine_threadsafe(
+                async_set_operation_mode(operation_mode), loop)
 
-    # Get the switches
-    #for switch_number in SwitchNumber:
-    #    response = await client.async_execute(GetSwitchCommand(switch_number))
+        # Clear status
+        elif line == 'clear':
+            async def async_clear_status():
+                try:
+                    await baseunit.async_clear_status()
+                    print("Cleared status on base unit.")
+                except Exception:
+                    traceback.print_exc()
 
-    # Iterate through all device categories and get device info
-    for dc in DC_ALL:
-        if dc.max_devices:
-            for index in range(0, dc.max_devices):
-                response = await client.async_execute(GetDeviceByIndexCommand(dc, index))
-                if isinstance(response, DeviceNotFoundResponse):
-                    break
+            asyncio.run_coroutine_threadsafe(
+                async_clear_status(), loop)
 
-    _LOGGER.debug("Completed test commands.")
+        # Set current date/time
+        elif line == 'setdatetime':
+            async def async_set_datetime():
+                try:
+                    await baseunit.async_set_datetime()
+                    print("Base unit has been set to the current date/time.")
+                except Exception:
+                    traceback.print_exc()
 
-def _on_response(client, response, command):
-    # To test running other clients (eg. HyperSecureLink) at same time
-    if command is None:
-        _LOGGER.debug("Response unsolicited: %s", response)
+            asyncio.run_coroutine_threadsafe(
+                async_set_datetime(), loop)
+
+        # Toggle specified switch
+        # 'SW01' - toggle switch 1
+        elif line.startswith('sw'):
+            async def async_set_switch_state(switch_number: SwitchNumber, new_state: bool):
+                try:
+                    await baseunit.async_set_switch_state(switch_number, new_state)
+                    print("Switch {} is now {}.".format(
+                        switch_number.name, "on" if new_state else "off"))
+                except Exception:
+                    traceback.print_exc()
+
+            switch_number = next((item for item in SwitchNumber if item.name == line.upper()), None)
+            if switch_number is None:
+                print("Invalid switch number.")
+                continue
+            new_state = not baseunit.switch_state[switch_number]
+            asyncio.run_coroutine_threadsafe(
+                async_set_switch_state(switch_number, new_state), loop)
+
+        # Add device to specified category
+        # 'add b' - start listening for a new Burglar device to add
+        # Note - only enables listening mode. The actual completion (or error)
+        #        when done happens later via a second response.
+        elif line.startswith('add '):
+            async def async_add_device(device_category: DeviceCategory):
+                try:
+                    await baseunit.async_add_device(device_category)
+                    print("Base unit now listening for new device.")
+                except Exception:
+                    traceback.print_exc()
+
+            args = line.split()
+            device_category = DC_ALL_LOOKUP.get(args[1])
+            if device_category is None or device_category.max_devices is None:
+                print("Invalid device category id.")
+                continue
+            asyncio.run_coroutine_threadsafe(
+                async_add_device(device_category), loop)
+
+        # Change device settings on the base unit
+        # 'change 123456 01 02 4410 0000' - change device 123456 to
+        #  zone 01-02, enable status flags 4410 and switch flags 0000
+        elif line.startswith('change '):
+            async def async_change_device(
+                    device_id: int, group_number: int, unit_number: int,
+                    enable_status: ESFlags, switches: SwitchFlags):
+                try:
+                    await baseunit.async_change_device(
+                        device_id, group_number, unit_number, enable_status,
+                        switches)
+                    print("Changed settings for device. New device settings:\n"
+                          + str(baseunit.devices[device_id]))
+                except Exception:
+                    traceback.print_exc()
+
+            args = line.split()
+            try:
+                device_id = int(args[1], 16)
+            except Exception:
+                print("Invalid device id.")
+                continue
+            try:
+                group_number = int(args[2], 16)
+                unit_number = int(args[3], 16)
+                enable_status = ESFlags(int(args[4], 16))
+                switches = SwitchFlags(int(args[5], 16))
+            except Exception:
+                print("Invalid args.")
+                continue
+            asyncio.run_coroutine_threadsafe(
+                async_change_device(
+                    device_id, group_number, unit_number, enable_status,
+                    switches), loop)
+
+        # Delete device with specified id
+        # 'delete 123456' - delete device 123456
+        elif line.startswith('delete '):
+            async def async_delete_device(device_id: int):
+                try:
+                    device = baseunit.devices[device_id]
+                    await baseunit.async_delete_device(device_id)
+                    print("Deleted device:\n" + str(device))
+                except Exception:
+                    traceback.print_exc()
+
+            args = line.split()
+            try:
+                device_id = int(args[1], 16)
+            except Exception:
+                print("Invalid device id.")
+                continue
+            asyncio.run_coroutine_threadsafe(
+                async_delete_device(device_id), loop)
+
+        # Get event log entries
+        # 'eventlog' - get all entries
+        # 'eventlog 50' - get only the 50 most recent entries
+        elif line.startswith('eventlog'):
+            async def async_get_event_log(baseunit: BaseUnit,
+                                          max_count: Optional[int]) -> None:
+                # Get first entry in memory, as we need the index of the last entry
+                response = await baseunit.async_get_event_log(0)
+                if response is None:
+                    print("The event log is empty.")
+                    return
+
+                # Go backwards from the end (most recent entry) to the start (oldest)
+                index = response.last_index
+                if max_count is None:
+                    first_index = 0
+                else:
+                    first_index = max(0, index + 1 - max_count)
+                print("There are {} log entries; showing {}...".format(
+                    index + 1,
+                    "all" if max_count is None or first_index == 0 else
+                    "{} most recent".format(max_count)))
+                while index >= first_index:
+                    response = await baseunit.async_get_event_log(index)
+                    if response is not None:
+                        print(response)
+                    index -= 1
+
+            args = line.split()
+            max_count = None
+            if len(args) > 1:
+                try:
+                    max_count = int(args[1])
+                    if max_count < 1:
+                        raise ValueError
+                except Exception:
+                    print("Max Count must be a positive number.")
+                    continue
+            asyncio.run_coroutine_threadsafe(
+                async_get_event_log(baseunit, max_count), loop)
+
+        # Get sensor log readings for 'Special' devices
+        # 'sensorlog' - get all readings
+        # 'sensorlog 50' - get only the 50 most recent readings
+        elif line.startswith('sensorlog'):
+            async def async_get_sensor_log(baseunit: BaseUnit,
+                                           max_count: Optional[int]) -> None:
+                # Get first entry in memory, as we need the index of the last entry
+                response = await baseunit.async_get_sensor_log(0)
+                if response is None:
+                    print("The sensor log is empty.")
+                    return
+
+                # Go backwards from the end (most recent entry) to the start (oldest)
+                index = response.last_index
+                if max_count is None:
+                    first_index = 0
+                else:
+                    first_index = max(0, index + 1 - max_count)
+                print("There are {} readings; showing {}...".format(
+                    index + 1,
+                    "all" if max_count is None or first_index == 0 else
+                    "{} most recent".format(max_count)))
+                while index >= first_index:
+                    response = await baseunit.async_get_sensor_log(index)
+                    if response is not None:
+                        print(response)
+                    index -= 1
+
+            args = line.split()
+            max_count = None
+            if len(args) > 1:
+                try:
+                    max_count = int(args[1])
+                    if max_count < 1:
+                        raise ValueError
+                except Exception:
+                    print("Max Count must be a positive number.")
+                    continue
+            asyncio.run_coroutine_threadsafe(
+                async_get_sensor_log(baseunit, max_count), loop)
+
 
 if __name__ == "__main__":
     main(sys.argv)

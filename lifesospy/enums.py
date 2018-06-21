@@ -5,6 +5,8 @@ if float('%s.%s' % sys.version_info[:2]) >= 3.6:
     from enum import IntFlag
 else:
     from aenum import IntFlag
+from typing import Optional
+
 
 class DeviceType(IntEnum):
     """Indicates the type of LifeSOS device."""
@@ -50,8 +52,9 @@ class DeviceType(IntEnum):
     RFSirenOnTime = 0xC1
 
     @classmethod
-    def has_value(cls, value):
+    def has_value(cls, value: int) -> bool:
         return any(value == item.value for item in cls)
+
 
 class DeviceEventCode(IntEnum):
     """Type of event raised by a device."""
@@ -69,8 +72,9 @@ class DeviceEventCode(IntEnum):
     Panic = 0x0a60
 
     @classmethod
-    def has_value(cls, value):
+    def has_value(cls, value: int) -> bool:
         return any(value == item.value for item in cls)
+
 
 class OperationMode(IntEnum):
     """Mode of operation for the base unit."""
@@ -80,8 +84,27 @@ class OperationMode(IntEnum):
     Monitor = 0x8
 
     @classmethod
-    def has_value(cls, value):
+    def has_value(cls, value: int) -> bool:
         return any(value == item.value for item in cls)
+
+
+class BaseUnitState(IntEnum):
+    """State of the base unit."""
+    Disarm = int(OperationMode.Disarm)
+    Home = int(OperationMode.Home)
+    Away = int(OperationMode.Away)
+    Monitor = int(OperationMode.Monitor)
+    AwayExitDelay = 0x10
+    AwayEntryDelay = 0x11
+
+    @classmethod
+    def has_value(cls, value: int) -> bool:
+        return any(value == item.value for item in cls)
+
+    @classmethod
+    def from_operation_mode(cls, operation_mode: OperationMode) -> 'BaseUnitState':
+        return BaseUnitState(int(operation_mode))
+
 
 class DCFlags(IntFlag):
     """Device Characteristics flags."""
@@ -93,6 +116,7 @@ class DCFlags(IntFlag):
     Reserved_b2 = 0x04
     Reserved_b1 = 0x02
     Reserved_b0 = 0x01
+
 
 class ESFlags(IntFlag):
     """Enable Status flags."""
@@ -115,6 +139,7 @@ class ESFlags(IntFlag):
     Reserved_b1 = 0x0002
     Reserved_b0 = 0x0001
 
+
 class SSFlags(IntFlag):
     """Special Sensor Status flags."""
     ControlAlarm = 0x80
@@ -126,6 +151,7 @@ class SSFlags(IntFlag):
     Reserved_b1 = 0x02
     Reserved_b0 = 0x01
 
+
 class ContactIDEventQualifier(IntEnum):
     """Provides context for the type of event in a Contact ID message."""
     Event = 0x1     # New Event or Opening
@@ -133,8 +159,24 @@ class ContactIDEventQualifier(IntEnum):
     Repeat = 0x6    # Previously reported condition still present
 
     @classmethod
-    def has_value(cls, value):
+    def has_value(cls, value: int) -> bool:
         return any(value == item.value for item in cls)
+
+
+class ContactIDEventCategory(IntEnum):
+    """Category of event in a ContactID message."""
+    Alarm = 0x100
+    Supervisory = 0x200
+    Trouble = 0x300
+    OpenClose_Access = 0x400
+    Bypass_Disable = 0x500
+    Test_Misc = 0x600
+    Automation = 0x900
+
+    @classmethod
+    def has_value(cls, value: int) -> bool:
+        return any(value == item.value for item in cls)
+
 
 class ContactIDEventCode(IntEnum):
     """Type of event indicated by a ContactID message."""
@@ -406,7 +448,7 @@ class ContactIDEventCode(IntEnum):
     PanicZoneWalkTested = 0x615
     ServiceRequest = 0x616
     MotionStop = 0x617
-    Trigger = 0x618
+    Trigger_Monitor = 0x618
     MonitorMode = 0x619
 
     # Event Log -620
@@ -443,8 +485,29 @@ class ContactIDEventCode(IntEnum):
     LowLimitOperation = 0x913
 
     @classmethod
-    def has_value(cls, value):
+    def has_value(cls, value: int) -> bool:
         return any(value == item.value for item in cls)
+
+
+class SwitchFlags(IntFlag):
+    """Indicates switches that will be activated when device is triggered."""
+    SW01 = 0x8000
+    SW02 = 0x4000
+    SW03 = 0x2000
+    SW04 = 0x1000
+    SW05 = 0x0800
+    SW06 = 0x0400
+    SW07 = 0x0200
+    SW08 = 0x0100
+    SW09 = 0x0080
+    SW10 = 0x0040
+    SW11 = 0x0020
+    SW12 = 0x0010
+    SW13 = 0x0008
+    SW14 = 0x0004
+    SW15 = 0x0002
+    SW16 = 0x0001
+
 
 class SwitchNumber(IntEnum):
     """Identifier for the switch number."""
@@ -466,8 +529,9 @@ class SwitchNumber(IntEnum):
     SW16 = 0x3
 
     @classmethod
-    def has_value(cls, value):
+    def has_value(cls, value: int) -> bool:
         return any(value == item.value for item in cls)
+
 
 class SwitchState(IntEnum):
     """State of a switch."""
@@ -475,5 +539,5 @@ class SwitchState(IntEnum):
     Off = 0xc
 
     @classmethod
-    def has_value(cls, value):
+    def has_value(cls, value: int) -> bool:
         return any(value == item.value for item in cls)

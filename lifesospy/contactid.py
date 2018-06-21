@@ -1,12 +1,17 @@
 from lifesospy.const import *
+from lifesospy.devicecategory import *
 from lifesospy.enums import (
     ContactIDEventQualifier as EventQualifier,
+    ContactIDEventCategory as EventCategory,
     ContactIDEventCode as EventCode)
+from typing import Optional
+
 
 class ContactID(object):
     """Represents a message using the Ademco ® Contact ID protocol."""
 
-    def __init__(self, text):
+    def __init__(self, text: str):
+        self._text = text
         if len(text) != 16:
             raise ValueError("ContactID message length is invalid.")
 
@@ -23,71 +28,128 @@ class ContactID(object):
         if not self._message_type in [0x18, 0x98]:
             raise ValueError("ContactID message type is invalid.")
         self._event_qualifier_value = int(text[6:7], 16)
-        self._event_code_value = int(text[7:10], 16)
-        self._partition = int(text[10:12], 16)
-        # Spec says zone/user uses next 3 digits, but LifeSOS only needs
-        # 2 digits, so it seems to use first digit for device category index
-        self._device_category = DC_ALL[int(text[12:13], 16)]
-        self._zone_user = int(text[13:15], 16)
-        self._checksum = int(text[15:16], 16)
-
         if EventQualifier.has_value(self._event_qualifier_value):
             self._event_qualifier = EventQualifier(self._event_qualifier_value)
         else:
             self._event_qualifier = None
-
+        self._event_code_value = int(text[7:10], 16)
         if EventCode.has_value(self._event_code_value):
             self._event_code = EventCode(self._event_code_value)
         else:
             self._event_code = None
+        group_partition = int(text[10:12], 16)
+        # Spec says zone/user uses next 3 digits; however LifeSOS uses the
+        # first digit for device category index, and the remaining two digits
+        # for either unit number or user id (depending on whether event is
+        # for the base unit or not)
+        self._device_category = DC_ALL[int(text[12:13], 16)]
+        zone_user = int(text[13:15], 16)
+        if self._device_category == DC_BASEUNIT:
+            self._group_number = None
+            self._unit_number = None
+            self._user_id = zone_user if zone_user != 0 else None
+        else:
+            self._group_number = group_partition
+            self._unit_number = zone_user
+            self._user_id = None
+        self._checksum = int(text[15:16], 16)
+
+    #
+    # PROPERTIES
+    #
 
     @property
-    def account_number(self):
+    def account_number(self) -> int:
+        """Account number identifies this alarm panel to the receiver."""
         return self._account_number
 
     @property
-    def message_type(self):
-        return self._message_type
+    def checksum(self) -> int:
+        """Checksum digit used to verify message integrity."""
+        return self._checksum
 
     @property
-    def event_qualifier_value(self):
-        return self._event_qualifier_value
-
-    @property
-    def event_qualifier(self):
-        return self._event_qualifier
-
-    @property
-    def event_code_value(self):
-        return self._event_code_value
-
-    @property
-    def event_code(self):
-        return self._event_code
-
-    def device_category(self):
+    def device_category(self) -> DeviceCategory:
+        """Category for the device."""
         return self._device_category
 
     @property
-    def partition(self):
-        return self._partition
+    def event_category(self) -> EventCategory:
+        """Category for the type of event."""
+        return EventCategory(self._event_code_value & 0xf00)
 
     @property
-    def zone_user(self):
-        return self._zone_user
+    def event_code(self) -> Optional[EventCode]:
+        """Type of event."""
+        return self._event_code
 
     @property
-    def checksum(self):
-        return self._checksum
+    def event_code_value(self) -> int:
+        """Value that represents the type of event."""
+        return self._event_code_value
 
-    def __str__(self):
-        return "Account {0:04x}, {1} {2:03x} ({3}), Category '{4}', Partition {5:02x}, {6} {7:02x}".\
+    @property
+    def event_qualifier(self) -> Optional[EventQualifier]:
+        """Provides context for the type of event."""
+        return self._event_qualifier
+
+    @property
+    def event_qualifier_value(self) -> int:
+        """Value that represents the context for the type of event."""
+        return self._event_qualifier_value
+
+    @property
+    def group_number(self) -> Optional[int]:
+        """Group number the device is assigned to."""
+        return self._group_number
+
+    @property
+    def message_type(self) -> int:
+        """
+        Message type is used to identify the message to the receiver.
+
+        It must be 0x18 (preferred) or 0x98 (optional).
+        """
+        return self._message_type
+
+    @property
+    def text(self) -> str:
+        """The original (undecoded) Contact ID message text."""
+        return self._text
+
+    @property
+    def unit_number(self) -> Optional[int]:
+        """Unit number the device is assigned to (within group)."""
+        return self._unit_number
+
+    @property
+    def user_id(self) -> Optional[int]:
+        """Identifies the user."""
+        return self._user_id
+
+    @property
+    def zone(self) -> Optional[str]:
+        """Zone the device is assigned to."""
+        if self._device_category == DC_BASEUNIT:
+            return None
+        else:
+            return '{:02x}-{:02x}'.format(self._group_number, self._unit_number)
+
+    #
+    # METHODS - Public
+    #
+
+    def __repr__(self) -> str:
+        zone_user = ''
+        if self.zone is not None:
+            zone_user = ", Zone '{}'".format(self.zone)
+        elif self._user_id is not None:
+            zone_user = ", User {:02x}".format(self._user_id)
+        return "<ContactID: Account {:04x}, {} {:03x} ({}), Category '{}'{}>".\
             format(self._account_number,
                    self._event_qualifier_value if not self._event_qualifier else self._event_qualifier.name,
                    self._event_code_value,
                    "Unknown" if not self._event_code else self._event_code.name,
                    self._device_category.description,
-                   self._partition,
-                   "Zone" if self._device_category != DC_BASEUNIT else "User",
-                   self._zone_user)
+                   zone_user)
 

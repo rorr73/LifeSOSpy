@@ -1,12 +1,14 @@
+import lifesospy.const as lifesospy_const
+
 from setuptools import setup
 
 setup(
-    name='lifesospy',
-    version='0.4.4',
+    name=lifesospy_const.PROJECT_NAME,
+    description=lifesospy_const.PROJECT_DESCRIPTION,
+    version=lifesospy_const.PROJECT_VERSION,
     packages=['lifesospy'],
     install_requires=['aenum'],
     python_requires='>=3.5.3',
-    description='Provides an interface to LifeSOS alarm systems.',
     author='Richard Orr',
     url='https://github.com/rorr73/lifesospy',
     classifiers=[

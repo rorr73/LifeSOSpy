@@ -1,10 +1,12 @@
 from lifesospy.enums import (
     DeviceType, DeviceEventCode as EventCode, DCFlags)
+from typing import Optional
+
 
 class DeviceEvent(object):
     """Represents a device event."""
 
-    def __init__(self, text):
+    def __init__(self, text: str):
         if len(text) < 19:
             raise ValueError("Event length is invalid.")
 
@@ -12,7 +14,7 @@ class DeviceEvent(object):
         self._device_type_value = int(text[11:13], 16)
         self._device_id = int(text[13:19], 16)
         self._message_attribute = int(text[19:21], 16)
-        self._device_char = DCFlags(int(text[21:23], 16))
+        self._device_characteristics = DCFlags(int(text[21:23], 16))
         self._current_status = int(text[23:25], 16)
         # self._?? = int(text[25:27], 16)
         # self._?? = int(text[27:29], 16)
@@ -27,55 +29,54 @@ class DeviceEvent(object):
         else:
             self._device_type = None
 
-    @property
-    def event_code_value(self):
-        """Value that represents the type of event."""
-        return self._event_code_value
+    #
+    # PROPERTIES
+    #
 
     @property
-    def event_code(self):
-        """Type of event."""
-        return self._event_code
-
-    @property
-    def device_type_value(self):
-        """Value that represents the type of device."""
-        return self._device_type_value
-
-    @property
-    def device_type(self):
-        """Type of device."""
-        return self._device_type
-
-    @property
-    def device_id(self):
-        """Unique identifier for the device."""
-        return self._device_id
-
-    @property
-    def message_attribute(self):
-        """Message Attribute."""
-        return self._message_attribute
-
-    @property
-    def device_char(self):
-        """Device Characteristics flags."""
-        return self._device_char
-    @property
-
-    def current_status(self):
+    def current_status(self) -> int:
         """Multi-purpose field containing RSSI reading and magnet sensor flag.
            Recommend using the 'rssi_db', 'rssi_bars' or 'is_closed' properties
            instead. """
         return self._current_status
 
     @property
-    def rssi_db(self):
-        """Received Signal Strength Indication, in dB."""
-        return max(min(self._current_status - 0x40, 99), 0)
+    def device_characteristics(self) -> DCFlags:
+        """Flags indicating the device characteristics."""
+        return self._device_characteristics
 
     @property
-    def rssi_bars(self):
+    def device_id(self) -> int:
+        """Unique identifier for the device."""
+        return self._device_id
+
+    @property
+    def device_type(self) -> Optional[DeviceType]:
+        """Type of device."""
+        return self._device_type
+
+    @property
+    def device_type_value(self) -> int:
+        """Value that represents the type of device."""
+        return self._device_type_value
+
+    @property
+    def event_code(self) -> Optional[EventCode]:
+        """Type of event."""
+        return self._event_code
+
+    @property
+    def event_code_value(self) -> int:
+        """Value that represents the type of event."""
+        return self._event_code_value
+
+    @property
+    def message_attribute(self) -> int:
+        """Message Attribute."""
+        return self._message_attribute
+
+    @property
+    def rssi_bars(self) -> int:
         """Received Signal Strength Indication, from 0 to 4 bars."""
         rssi_db = self.rssi_db
         if rssi_db < 45:
@@ -90,18 +91,20 @@ class DeviceEvent(object):
             return 4
 
     @property
-    def is_closed(self):
-        """For Magnet Sensor; True if Closed, False if Open."""
-        return bool(self._current_status & 0x01)
+    def rssi_db(self) -> int:
+        """Received Signal Strength Indication, in dB."""
+        return max(min(self._current_status - 0x40, 99), 0)
 
-    def __str__(self):
-        return "Device Id {0:06x}, Type {1:02x} ({2}), Event {3:04x} ({4}), RSSI {5} dB{6}, {7}.".\
+    #
+    # METHODS - Public
+    #
+
+    def __repr__(self) -> str:
+        return "<DeviceEvent: Id {:06x}, Type {:02x} ({}), Event {:04x} ({}), RSSI {} dB, {}>".\
             format(self._device_id,
                    self._device_type_value,
                    "Unknown" if not self._device_type else self._device_type.name,
                    self._event_code_value,
                    "Unknown" if not self._event_code else self._event_code.name,
                    self.rssi_db,
-                   '' if self._device_type_value != DeviceType.DoorMagnet else ", IsClosed={0}".format(
-                       self.is_closed),
-                   str(self._device_char))
+                   str(self._device_characteristics))
