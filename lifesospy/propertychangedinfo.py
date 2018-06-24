@@ -1,4 +1,5 @@
-from typing import Any
+from lifesospy.util import *
+from typing import Any, Dict
 
 
 class PropertyChangedInfo(object):
@@ -37,3 +38,7 @@ class PropertyChangedInfo(object):
             format(self._name,
                    "Unknown" if self._old_value is None else str(self._old_value),
                    "Unknown" if self._new_value is None else str(self._new_value))
+
+    def as_dict(self) -> Dict[str, Any]:
+        """Converts to a dict of attributes for easier JSON serialisation."""
+        return obj_to_dict(self)

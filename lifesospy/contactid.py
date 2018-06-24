@@ -4,14 +4,14 @@ from lifesospy.enums import (
     ContactIDEventQualifier as EventQualifier,
     ContactIDEventCategory as EventCategory,
     ContactIDEventCode as EventCode)
-from typing import Optional
+from lifesospy.util import *
+from typing import Optional, Dict, Any
 
 
 class ContactID(object):
     """Represents a message using the Ademco ® Contact ID protocol."""
 
     def __init__(self, text: str):
-        self._text = text
         if len(text) != 16:
             raise ValueError("ContactID message length is invalid.")
 
@@ -113,11 +113,6 @@ class ContactID(object):
         return self._message_type
 
     @property
-    def text(self) -> str:
-        """The original (undecoded) Contact ID message text."""
-        return self._text
-
-    @property
     def unit_number(self) -> Optional[int]:
         """Unit number the device is assigned to (within group)."""
         return self._unit_number
@@ -153,3 +148,6 @@ class ContactID(object):
                    self._device_category.description,
                    zone_user)
 
+    def as_dict(self) -> Dict[str, Any]:
+        """Converts to a dict of attributes for easier JSON serialisation."""
+        return obj_to_dict(self)

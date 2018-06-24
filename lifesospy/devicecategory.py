@@ -1,5 +1,6 @@
 from collections import OrderedDict
-from typing import Optional
+from lifesospy.util import *
+from typing import Optional, Dict, Any
 
 
 class DeviceCategory(object):
@@ -33,6 +34,11 @@ class DeviceCategory(object):
             format(self._id,
                    self._description,
                    self._max_devices)
+
+    def as_dict(self) -> Dict[str, Any]:
+        """Converts to a dict of attributes for easier JSON serialisation."""
+        return obj_to_dict(self)
+
 
 # Device categories
 DC_CONTROLLER = DeviceCategory('c', 'Controller', 32)

@@ -10,8 +10,7 @@ from typing import Optional, Union
 class Response(ABC):
     """Represents response from a command issued to the LifeSOS base unit."""
 
-    def __init__(self, text: str):
-        self._text = text
+    def __init__(self):
         self._is_error = False
 
     @property
@@ -24,11 +23,6 @@ class Response(ABC):
     def is_error(self) -> bool:
         """True if an error occurred; otherwise, False."""
         return self._is_error
-
-    @property
-    def text(self) -> str:
-        """The original (undecoded) response text."""
-        return self._text
 
     @staticmethod
     def parse(text) -> Optional['Response']:
@@ -105,12 +99,16 @@ class Response(ABC):
         return "<{}{}>".format(self.__class__.__name__,
                                "" if not self._is_error else " [ERROR]")
 
+    def as_dict(self) -> Dict[str, Any]:
+        """Converts to a dict of attributes for easier JSON serialisation."""
+        return obj_to_dict(self)
+
 
 class DateTimeResponse(Response):
     """Response that provides the current date/time on the LifeSOS base unit."""
 
     def __init__(self, text: str):
-        Response.__init__(self, text)
+        Response.__init__(self)
         text = text[len(CMD_DATETIME):]
         self._was_set = text.startswith(ACTION_SET)
         if self._was_set:
@@ -145,7 +143,7 @@ class OpModeResponse(Response):
     """Response that provides the current operation mode on the LifeSOS base unit."""
 
     def __init__(self, text: str):
-        Response.__init__(self, text)
+        Response.__init__(self)
         text = text[len(CMD_OPMODE):]
         self._was_set = text.startswith(ACTION_SET)
         if self._was_set:
@@ -184,7 +182,7 @@ class DeviceInfoResponse(Response):
        have been configured for it on the base unit."""
 
     def __init__(self, text: str):
-        Response.__init__(self, text)
+        Response.__init__(self)
         self._command_name = text[0:2]
         self._device_category = DC_ALL_LOOKUP[text[1:2]]
         text = text[2:]
@@ -408,7 +406,7 @@ class DeviceSettingsResponse(Response):
     """Settings configured in base unit for a device."""
 
     def __init__(self, text: str):
-        Response.__init__(self, text)
+        Response.__init__(self)
         self._command_name = text[0:2]
         self._device_category = DC_ALL_LOOKUP[text[1:2]]
         text = text[3:]
@@ -494,7 +492,7 @@ class DeviceNotFoundResponse(Response):
     """Response that indicates there was no device at specified index or zone."""
 
     def __init__(self, text: str):
-        Response.__init__(self, text)
+        Response.__init__(self)
         self._command_name = text[0:2]
         self._device_category = DC_ALL_LOOKUP[text[1:2]]
 
@@ -519,7 +517,7 @@ class DeviceAddingResponse(Response):
     """Response indicating the base unit is now waiting for a device to enroll."""
 
     def __init__(self, text: str):
-        Response.__init__(self, text)
+        Response.__init__(self)
         self._command_name = text[0:2]
         self._device_category = DC_ALL_LOOKUP[text[1:2]]
 
@@ -556,7 +554,7 @@ class DeviceDeletedResponse(Response):
     """Response that indicates a device was deleted."""
 
     def __init__(self, text: str):
-        Response.__init__(self, text)
+        Response.__init__(self)
         self._command_name = text[0:2]
         self._device_category = DC_ALL_LOOKUP[text[1:2]]
         text = text[3:]
@@ -587,7 +585,7 @@ class ClearedStatusResponse(Response):
     """Response that indicates status was cleared on base unit."""
 
     def __init__(self, text: str):
-        Response.__init__(self, text)
+        Response.__init__(self)
 
     @property
     def command_name(self) -> str:
@@ -602,7 +600,7 @@ class ROMVersionResponse(Response):
     """Response that provides the ROM version on the base unit."""
 
     def __init__(self, text: str):
-        Response.__init__(self, text)
+        Response.__init__(self)
         text = text[len(CMD_ROMVER):]
         self._version = text
 
@@ -626,7 +624,7 @@ class ExitDelayResponse(Response):
     """Response that provides the current exit delay on the LifeSOS base unit."""
 
     def __init__(self, text: str):
-        Response.__init__(self, text)
+        Response.__init__(self)
         text = text[len(CMD_EXIT_DELAY):]
         self._was_set = text.startswith(ACTION_SET)
         if self._was_set:
@@ -659,7 +657,7 @@ class EntryDelayResponse(Response):
     """Response that provides the current entry delay on the LifeSOS base unit."""
 
     def __init__(self, text: str):
-        Response.__init__(self, text)
+        Response.__init__(self)
         text = text[len(CMD_ENTRY_DELAY):]
         self._was_set = text.startswith(ACTION_SET)
         if self._was_set:
@@ -692,7 +690,7 @@ class SwitchResponse(Response):
     """Response that provides the state of a switch on the LifeSOS base unit."""
 
     def __init__(self, text: str):
-        Response.__init__(self, text)
+        Response.__init__(self)
         self._switch_number = SwitchNumber(from_ascii_hex(text[1:2]))
         text = text[2:]
         self._was_set = text.startswith(ACTION_SET)
@@ -744,7 +742,7 @@ class EventLogResponse(Response):
     """Response that provides an entry from the event log."""
 
     def __init__(self, text: str):
-        Response.__init__(self, text)
+        Response.__init__(self)
         text = text[len(CMD_EVENT_LOG):]
         self._event_qualifier_value = int(text[0:1], 16)
         if ContactIDEventQualifier.has_value(self._event_qualifier_value):
@@ -873,7 +871,7 @@ class EventLogNotFoundResponse(Response):
     """Response that indicates there was no entry in event log at specified index."""
 
     def __init__(self, text: str):
-        Response.__init__(self, text)
+        Response.__init__(self)
 
     @property
     def command_name(self) -> str:
@@ -885,7 +883,7 @@ class SensorLogResponse(Response):
     """Response that provides an entry from the Special sensor log."""
 
     def __init__(self, text: str):
-        Response.__init__(self, text)
+        Response.__init__(self)
         text = text[len(CMD_SENSOR_LOG):]
         self._group_number = int(text[0:2], 16)
         self._unit_number = int(text[2:4], 16)
@@ -954,7 +952,7 @@ class SensorLogNotFoundResponse(Response):
     """Response that indicates there was no entry in Special sensor log at specified index."""
 
     def __init__(self, text: str):
-        Response.__init__(self, text)
+        Response.__init__(self)
 
     @property
     def command_name(self) -> str:

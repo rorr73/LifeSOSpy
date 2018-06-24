@@ -1,3 +1,13 @@
+import sys
+
+from enum import Enum
+if float('%s.%s' % sys.version_info[:2]) >= 3.6:
+    from enum import IntFlag
+else:
+    from aenum import IntFlag
+from typing import Dict, Any
+
+
 def to_ascii_hex(value: int, digits: int) -> str:
     """Converts an int value to ASCII hex, as used by LifeSOS.
        Unlike regular hex, it uses the first 6 characters that follow
@@ -9,6 +19,7 @@ def to_ascii_hex(value: int, digits: int) -> str:
         text = chr(ord('0') + (value % 0x10)) + text
         value //= 0x10
     return text
+
 
 def from_ascii_hex(text:str) -> int:
     """Converts to an int value from both ASCII and regular hex.
@@ -30,3 +41,25 @@ def from_ascii_hex(text:str) -> int:
                 "Response contains invalid character.")
         value = (value * 0x10) + digit
     return value
+
+
+def obj_to_dict(obj: Any) -> Dict[str, Any]:
+    """Converts to a dict of attributes for easier JSON serialisation."""
+    from enum import IntEnum
+    data = {}
+    for name in dir(obj.__class__):
+        if not isinstance(getattr(obj.__class__, name), property):
+            continue
+        value = getattr(obj, name)
+        if hasattr(value, 'as_dict'):
+            value = value.as_dict()
+        elif isinstance(value, IntFlag):
+            value = str(value)[len(value.__class__.__name__)+1:]
+            if value == '0':
+                value = None
+            else:
+                value = value.split('|')
+        elif isinstance(value, Enum):
+            value = value.name
+        data[name] = value
+    return data

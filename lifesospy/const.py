@@ -1,7 +1,7 @@
 # Project metadata
 PROJECT_NAME = 'lifesospy'
 PROJECT_DESCRIPTION = "Provides an interface to LifeSOS alarm systems."
-PROJECT_VERSION = '0.5.0'
+PROJECT_VERSION = '0.5.1'
 __version__ = PROJECT_VERSION
 
 # Command names

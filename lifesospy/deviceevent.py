@@ -1,6 +1,7 @@
 from lifesospy.enums import (
     DeviceType, DeviceEventCode as EventCode, DCFlags)
-from typing import Optional
+from lifesospy.util import *
+from typing import Optional, Dict, Any
 
 
 class DeviceEvent(object):
@@ -108,3 +109,7 @@ class DeviceEvent(object):
                    "Unknown" if not self._event_code else self._event_code.name,
                    self.rssi_db,
                    str(self._device_characteristics))
+
+    def as_dict(self) -> Dict[str, Any]:
+        """Converts to a dict of attributes for easier JSON serialisation."""
+        return obj_to_dict(self)

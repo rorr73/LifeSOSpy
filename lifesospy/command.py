@@ -4,6 +4,7 @@ from lifesospy.const import *
 from lifesospy.devicecategory import *
 from lifesospy.enums import *
 from lifesospy.util import *
+from typing import Dict, Any, Optional
 
 
 class Command(ABC):
@@ -37,6 +38,10 @@ class Command(ABC):
     def __repr__(self) -> str:
         return "<{}: '{}'>".format(self.__class__.__name__,
                                    self.format())
+
+    def as_dict(self) -> Dict[str, Any]:
+        """Converts to a dict of attributes for easier JSON serialisation."""
+        return obj_to_dict(self)
 
 
 class NoOpCommand(Command):
