@@ -12,27 +12,31 @@ class DeviceEvent(object):
             raise ValueError("Event length is invalid.")
 
         self._event_code_value = int(text[7:11], 16)
+        self._event_code = EventCode.parseint(self._event_code_value)
         self._device_type_value = int(text[11:13], 16)
+        self._device_type = DeviceType.parseint(self._device_type_value)
         self._device_id = int(text[13:19], 16)
         self._message_attribute = int(text[19:21], 16)
         self._device_characteristics = DCFlags(int(text[21:23], 16))
         self._current_status = int(text[23:25], 16)
-        # self._?? = int(text[25:27], 16)
-        # self._?? = int(text[27:29], 16)
-
-        if EventCode.has_value(self._event_code_value):
-            self._event_code = EventCode(self._event_code_value)
-        else:
-            self._event_code = None
-
-        if DeviceType.has_value(self._device_type_value):
-            self._device_type = DeviceType(self._device_type_value)
-        else:
-            self._device_type = None
+        # I have a feeling the next two are provided by the base unit even
+        # if the device didn't send them... given current_reading always
+        # shows my last temperature sensor reading on any burglar device
+        # events that follow it (ie. probably whatever was in buffer)
+        #if len(text) > 25:
+        #    self._?? = int(text[25:27], 16)
+        if len(text) > 27:
+            self._current_reading = decode_value_using_ma(
+                self._message_attribute, int(text[27:29], 16))
 
     #
     # PROPERTIES
     #
+
+    @property
+    def current_reading(self) -> Optional[Union[int, float]]:
+        """Current reading for a special sensor."""
+        return self._current_reading
 
     @property
     def current_status(self) -> int:
@@ -101,14 +105,16 @@ class DeviceEvent(object):
     #
 
     def __repr__(self) -> str:
-        return "<DeviceEvent: Id {:06x}, Type {:02x} ({}), Event {:04x} ({}), RSSI {} dB, {}>".\
-            format(self._device_id,
+        return "<{}: device_id={:06x}, device_type_value={:02x}, device_type={}, event_code_value={:04x}, event_code={}, rssi_db={}, device_characteristics={}, current_reading={}>".\
+            format(self.__class__.__name__,
+                   self._device_id,
                    self._device_type_value,
-                   "Unknown" if not self._device_type else self._device_type.name,
+                   str(self._device_type),
                    self._event_code_value,
-                   "Unknown" if not self._event_code else self._event_code.name,
+                   str(self._event_code),
                    self.rssi_db,
-                   str(self._device_characteristics))
+                   str(self._device_characteristics),
+                   self._current_reading)
 
     def as_dict(self) -> Dict[str, Any]:
         """Converts to a dict of attributes for easier JSON serialisation."""

@@ -34,10 +34,11 @@ class PropertyChangedInfo(object):
     #
 
     def __repr__(self) -> str:
-        return "<PropertyChangedInfo: '{}' changed from {} to {}>".\
-            format(self._name,
-                   "Unknown" if self._old_value is None else str(self._old_value),
-                   "Unknown" if self._new_value is None else str(self._new_value))
+        return "<{}: name={}, old_value={}, new_value={}>".\
+            format(self.__class__.__name__,
+                   self._name,
+                   str(self._old_value),
+                   str(self._new_value))
 
     def as_dict(self) -> Dict[str, Any]:
         """Converts to a dict of attributes for easier JSON serialisation."""

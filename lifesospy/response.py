@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, time
 from lifesospy.const import *
 from lifesospy.devicecategory import *
 from lifesospy.enums import *
@@ -77,17 +77,17 @@ class Response(ABC):
         elif text.startswith(CMD_ENTRY_DELAY):
             return EntryDelayResponse(text)
 
-        elif text.startswith(CMD_SWITCH_PREFIX) and SwitchNumber.has_value(from_ascii_hex(text[1:2])):
+        elif text.startswith(CMD_SWITCH_PREFIX) and is_ascii_hex(text[1:2]):
             return SwitchResponse(text)
 
         elif text.startswith(CMD_EVENT_LOG):
-            if RESPONSE_ERROR == text[2:] or text[2:4] == '00':
+            if RESPONSE_ERROR == text[2:]:
                 return EventLogNotFoundResponse(text)
             else:
                 return EventLogResponse(text)
 
         elif text.startswith(CMD_SENSOR_LOG):
-            if RESPONSE_ERROR == text[2:] or text[2:4] == '00':
+            if RESPONSE_ERROR == text[2:]:
                 return SensorLogNotFoundResponse(text)
             else:
                 return SensorLogResponse(text)
@@ -96,8 +96,9 @@ class Response(ABC):
             raise ValueError("Response not recognised: " + text)
 
     def __repr__(self) -> str:
-        return "<{}{}>".format(self.__class__.__name__,
-                               "" if not self._is_error else " [ERROR]")
+        return "<{}{}>".format(
+            self.__class__.__name__,
+            '' if not self._is_error else ": is_error")
 
     def as_dict(self) -> Dict[str, Any]:
         """Converts to a dict of attributes for easier JSON serialisation."""
@@ -133,10 +134,11 @@ class DateTimeResponse(Response):
         return self._was_set
 
     def __repr__(self) -> str:
-        return "<DateTimeResponse: Remote date/time {} {}{}>".\
-            format('is' if not self._was_set else "was set to",
+        return "{}: remote_datetime={}{}{}>".\
+            format(self.__class__.__name__,
                    self._remote_datetime.strftime('%a %d %b %Y %I:%M %p'),
-                   '' if not self._is_error else " [ERROR]")
+                   '' if not self._was_set else ", was_set",
+                   '' if not self._is_error else ", is_error")
 
 
 class OpModeResponse(Response):
@@ -148,11 +150,9 @@ class OpModeResponse(Response):
         self._was_set = text.startswith(ACTION_SET)
         if self._was_set:
             text = text[1:]
-        self._operation_mode_value = int(text, 16)
-        if OperationMode.has_value(self._operation_mode_value):
-            self._operation_mode = OperationMode(self._operation_mode_value)
-        else:
-            self._operation_mode = None
+        self._operation_mode_value = from_ascii_hex(text)
+        self._operation_mode = OperationMode.parseint(
+            self._operation_mode_value)
 
     @property
     def command_name(self) -> str:
@@ -170,11 +170,12 @@ class OpModeResponse(Response):
         return self._was_set
 
     def __repr__(self) -> str:
-        return "<OpModeResponse: Operation mode {} {:x} ({}){}>".\
-            format('is' if not self._was_set else "was set to",
+        return "<{}: operation_mode_value={:x}, operation_mode={}{}{}>".\
+            format(self.__class__.__name__,
                    self._operation_mode_value,
-                   'Unknown' if self._operation_mode is None else self._operation_mode.name,
-                   '' if not self._is_error else " [ERROR]")
+                   str(self._operation_mode),
+                   '' if not self._was_set else ", was_set",
+                   '' if not self._is_error else ", is_error")
 
 
 class DeviceInfoResponse(Response):
@@ -187,54 +188,48 @@ class DeviceInfoResponse(Response):
         self._device_category = DC_ALL_LOOKUP[text[1:2]]
         text = text[2:]
         if self._command_name.startswith(CMD_DEVICE_PREFIX):
-            self._index = int(text[0:2], 16)
+            self._index = from_ascii_hex(text[0:2])
             text = text[2:]
         else:
             self._index = None
-        self._device_type_value = int(text[0:2], 16)
-        if DeviceType.has_value(self._device_type_value):
-            self._device_type = DeviceType(self._device_type_value)
-        else:
-            self._device_type = None
-        self._device_id = int(text[2:8], 16)
-        self._message_attribute = int(text[8:10], 16)
-        self._device_characteristics = DCFlags(int(text[10:12], 16))
-        # self._?? = int(text[12:14], 16)
-        self._group_number = int(text[14:16], 16)
-        self._unit_number = int(text[16:18], 16)
-        self._enable_status = ESFlags(int(text[18:22], 16))
-        self._switches = SwitchFlags(int(text[22:26], 16))
-        self._current_status = int(text[26:28], 16)
-        self._down_count = int(text[28:30], 16)
+        self._device_type_value = from_ascii_hex(text[0:2])
+        self._device_type = DeviceType.parseint(self._device_type_value)
+        self._device_id = from_ascii_hex(text[2:8])
+        self._message_attribute = from_ascii_hex(text[8:10])
+        self._device_characteristics = DCFlags(from_ascii_hex(text[10:12]))
+        # self._?? = from_ascii_hex(text[12:14])
+        self._group_number = from_ascii_hex(text[14:16])
+        self._unit_number = from_ascii_hex(text[16:18])
+        self._enable_status = ESFlags(from_ascii_hex(text[18:22]))
+        self._switches = SwitchFlags(from_ascii_hex(text[22:26]))
+        self._current_status = from_ascii_hex(text[26:28])
+        self._down_count = from_ascii_hex(text[28:30])
 
         # Remaining fields used by the 'Special' sensors
         if len(text) > 30:
-            self._current_reading = self._apply_ma_to_ss_value(int(text[30:32], 16))
-            self._alarm_high_limit = self._apply_ma_to_ss_value(int(text[32:34], 16))
-            self._alarm_low_limit = self._apply_ma_to_ss_value(int(text[34:36], 16))
-            self._special_status = SSFlags(int(text[36:38], 16))
+            self._current_reading = decode_value_using_ma(
+                self._message_attribute, from_ascii_hex(text[30:32]))
+            self._high_limit = decode_value_using_ma(
+                self._message_attribute, from_ascii_hex(text[32:34]))
+            self._low_limit = decode_value_using_ma(
+                self._message_attribute, from_ascii_hex(text[34:36]))
+            self._special_status = SSFlags(from_ascii_hex(text[36:38]))
         else:
             self._current_reading = None
-            self._alarm_high_limit = None
-            self._alarm_low_limit = None
+            self._high_limit = None
+            self._low_limit = None
             self._special_status = None
         if len(text) > 38:
             # These don't exist on LS-30... they're LS-10/LS-20 only
-            self._control_high_limit = self._apply_ma_to_ss_value(int(text[38:40], 16))
-            self._control_low_limit = self._apply_ma_to_ss_value(int(text[40:42], 16))
+            self._control_high_limit = decode_value_using_ma(
+                self._message_attribute, from_ascii_hex(text[38:40]))
+            self._control_low_limit = decode_value_using_ma(
+                self._message_attribute, from_ascii_hex(text[40:42]))
+            self._control_limit_fields_exist = True
         else:
             self._control_high_limit = None
             self._control_low_limit = None
-
-    @property
-    def alarm_high_limit(self) -> Optional[int]:
-        """Alarm high limit setting for a special sensor."""
-        return self._alarm_high_limit
-
-    @property
-    def alarm_low_limit(self) -> Optional[int]:
-        """Alarm low limit setting for a special sensor."""
-        return self._alarm_low_limit
+            self._control_limit_fields_exist = False
 
     @property
     def command_name(self) -> str:
@@ -242,17 +237,22 @@ class DeviceInfoResponse(Response):
         return self._command_name
 
     @property
-    def control_high_limit(self) -> Optional[int]:
+    def control_high_limit(self) -> Optional[Union[int, float]]:
         """Control high limit setting for a special sensor."""
         return self._control_high_limit
 
     @property
-    def control_low_limit(self) -> Optional[int]:
+    def control_limit_fields_exist(self) -> bool:
+        """True if control limit fields exist in response; otherwise, False."""
+        return self._control_limit_fields_exist
+
+    @property
+    def control_low_limit(self) -> Optional[Union[int, float]]:
         """Control low limit setting for a special sensor."""
         return self._control_low_limit
 
     @property
-    def current_reading(self) -> Optional[int]:
+    def current_reading(self) -> Optional[Union[int, float]]:
         """Current reading for a special sensor."""
         return self._current_reading
 
@@ -305,6 +305,11 @@ class DeviceInfoResponse(Response):
         return self._group_number
 
     @property
+    def high_limit(self) -> Optional[Union[int, float]]:
+        """High limit setting for a special sensor."""
+        return self._high_limit
+
+    @property
     def index(self) -> int:
         """
         Index of device within the category (also known as memory address).
@@ -321,6 +326,11 @@ class DeviceInfoResponse(Response):
             return bool(self._current_status & 0x01)
         else:
             return None
+
+    @property
+    def low_limit(self) -> Optional[Union[int, float]]:
+        """Low limit setting for a special sensor."""
+        return self._low_limit
 
     @property
     def message_attribute(self) -> int:
@@ -368,38 +378,32 @@ class DeviceInfoResponse(Response):
         return '{:02x}-{:02x}'.format(self._group_number, self._unit_number)
 
     def __repr__(self) -> str:
-        return "<DeviceInfoResponse: Id {:06x}, Type {:02x} ({}), Category '{}', Zone '{}', RSSI {} dB{}, {}, {}, {}{}>".\
-            format(self._device_id,
+        if self._device_category == DC_SPECIAL:
+            special = ", current_reading={}, special_status={}, high_limit={}, low_limit={}".format(
+                self._current_reading,
+                str(self._special_status),
+                self._high_limit,
+                self._low_limit)
+            if self._control_limit_fields_exist:
+                special += ", control_high_limit={}, control_low_limit={}".format(
+                    self._control_high_limit,
+                    self._control_low_limit)
+        else:
+            special = ''
+        return "<{}: device_id={:06x}, device_type_value={:02x}, device_type={}, device_category.description={}, zone={}, rssi_db={}{}, device_characteristics={}, enable_status={}, switches={}{}{}>".\
+            format(self.__class__.__name__,
+                   self._device_id,
                    self._device_type_value,
-                   'Unknown' if self._device_type is None else self._device_type.name,
+                   str(self._device_type),
                    self._device_category.description,
                    self.zone,
                    self.rssi_db,
-                   '' if self._device_type_value != DeviceType.DoorMagnet else ", IsClosed={}".format(self.is_closed),
+                   '' if self._device_type_value != DeviceType.DoorMagnet else ", is_closed={}".format(self.is_closed),
                    str(self._device_characteristics),
                    str(self._enable_status),
                    str(self._switches),
-                   '' if not self._is_error else " [ERROR]")
-
-    def _apply_ma_to_ss_value(self, value: int) -> Optional[Union[int, float]]:
-        # Message attribute dictates how to determine the limit values
-        if self._message_attribute == MA_TX3AC_100A:
-            if value == 0xfe:
-                return None
-            else:
-                return value
-        elif self._message_attribute == MA_TX3AC_10A:
-            if value == 0xfe:
-                return None
-            else:
-                return value / 10
-        else:
-            if value == 0x80:
-                return None
-            elif value >= 0x80:
-                return 0 - (0x100 - value)
-            else:
-                return value
+                   special,
+                   '' if not self._is_error else ", is_error")
 
 
 class DeviceSettingsResponse(Response):
@@ -410,38 +414,73 @@ class DeviceSettingsResponse(Response):
         self._command_name = text[0:2]
         self._device_category = DC_ALL_LOOKUP[text[1:2]]
         text = text[3:]
-        self._index = int(text[0:2], 16)
-        self._group_number = int(text[2:4], 16)
-        self._unit_number = int(text[4:6], 16)
-        self._enable_status = ESFlags(int(text[6:10], 16))
-        self._switches = SwitchFlags(int(text[10:14], 16))
+        self._index = from_ascii_hex(text[0:2])
+        self._group_number = from_ascii_hex(text[2:4])
+        self._unit_number = from_ascii_hex(text[4:6])
+        self._enable_status = ESFlags(from_ascii_hex(text[6:10]))
+        self._switches = SwitchFlags(from_ascii_hex(text[10:14]))
 
-        # Don't own a Special sensor to test this, so leave for now
-        # if len(text) > 14:
-        #     self._current_status = int(text[14:16], 16)
-        #     self._down_count = int(text[16:18], 16)
-        #     self._current_reading = int(text[18:20], 16)
-        #     self._alarm_high_limit = int(text[20:22], 16)
-        #     self._alarm_low_limit = int(text[22:24], 16)
-        #     self._special_status = SSFlags(int(text[24:26], 16))
-        # else:
-        #     self._current_status = None
-        #     self._down_count = None
-        #     self._current_reading = None
-        #     self._alarm_high_limit = None
-        #     self._alarm_low_limit = None
-        #     self._special_status = None
-        # if len(text) > 26:
-        #     self._control_high_limit = int(text[26:28], 16)
-        #     self._control_low_limit = int(text[28:30], 16)
-        # else:
-        #     self._control_high_limit = None
-        #     self._control_low_limit = None
+        # Remaining fields used by the 'Special' sensors (though only appear
+        # in the changed response, not added response). Note that we don't
+        # have a message attribute, so values must be decoded by receiver.
+        if len(text) > 14:
+            self._current_status = from_ascii_hex(text[14:16])
+            self._down_count = from_ascii_hex(text[16:18])
+            self._current_reading_encoded = from_ascii_hex(text[18:20])
+            self._high_limit_encoded = from_ascii_hex(text[20:22])
+            self._low_limit_encoded = from_ascii_hex(text[22:24])
+            self._special_status = SSFlags(from_ascii_hex(text[24:26]))
+            self._special_fields_exist = True
+        else:
+            self._current_status = None
+            self._down_count = None
+            self._current_reading_encoded = None
+            self._high_limit_encoded = None
+            self._low_limit_encoded = None
+            self._special_status = None
+            self._special_fields_exist = False
+        if len(text) > 26:
+            self._control_high_limit_encoded = from_ascii_hex(text[26:28])
+            self._control_low_limit_encoded = from_ascii_hex(text[28:30])
+            self._control_limit_fields_exist = True
+        else:
+            self._control_high_limit_encoded = None
+            self._control_low_limit_encoded = None
+            self._control_limit_fields_exist = False
 
     @property
     def command_name(self) -> str:
         """Provides the command name."""
         return self._command_name
+
+    @property
+    def control_high_limit_encoded(self) -> Optional[int]:
+        """
+        Control high limit setting for a special sensor.
+        Must be decoded using message attribute from the device.
+        """
+        return self._control_high_limit_encoded
+
+    @property
+    def control_limit_fields_exist(self) -> bool:
+        """True if control limit fields exist in response; otherwise, False."""
+        return self._control_limit_fields_exist
+
+    @property
+    def control_low_limit_encoded(self) -> Optional[int]:
+        """
+        Control low limit setting for a special sensor.
+        Must be decoded using message attribute from the device.
+        """
+        return self._control_low_limit_encoded
+
+    @property
+    def current_reading_encoded(self) -> Optional[int]:
+        """
+        Current reading for a special sensor.
+        Must be decoded using message attribute from the device.
+        """
+        return self._current_reading_encoded
 
     @property
     def device_category(self) -> DeviceCategory:
@@ -459,9 +498,35 @@ class DeviceSettingsResponse(Response):
         return self._group_number
 
     @property
+    def high_limit_encoded(self) -> Optional[int]:
+        """
+        High limit setting for a special sensor.
+        Must be decoded using message attribute from the device.
+        """
+        return self._high_limit_encoded
+
+    @property
     def index(self) -> int:
         """Index of device within the category."""
         return self._index
+
+    @property
+    def low_limit_encoded(self) -> Optional[int]:
+        """
+        Low limit setting for a special sensor.
+        Must be decoded using message attribute from the device.
+        """
+        return self._low_limit_encoded
+
+    @property
+    def special_fields_exist(self) -> bool:
+        """True if special fields exist in response; otherwise, False."""
+        return self._special_fields_exist
+
+    @property
+    def special_status(self) -> Optional[SSFlags]:
+        """Special sensor status flags."""
+        return self._special_status
 
     @property
     def switches(self) -> SwitchFlags:
@@ -479,13 +544,26 @@ class DeviceSettingsResponse(Response):
         return '{:02x}-{:02x}'.format(self._group_number, self._unit_number)
 
     def __repr__(self) -> str:
-        return "<{}: Category '{}', Zone '{}', Index #{}, {}, {}>". \
+        if self._special_fields_exist:
+            special = ", current_reading_encoded={}, special_status={}, high_limit_encoded={}, low_limit_encoded={}".format(
+                self._current_reading_encoded,
+                str(self._special_status),
+                self._high_limit_encoded,
+                self._low_limit_encoded)
+            if self._control_limit_fields_exist:
+                special += ", control_high_limit_encoded={}, control_low_limit_encoded={}".format(
+                    self._control_high_limit_encoded,
+                    self._control_low_limit_encoded)
+        else:
+            special = ''
+        return "<{}: device_category.description={}, zone={}, index={}, enable_status={}, switches={}{}>". \
             format(self.__class__.__name__,
                    self._device_category.description,
                    self.zone,
                    self._index,
                    str(self._enable_status),
-                   str(self._switches))
+                   str(self._switches),
+                   special)
 
 
 class DeviceNotFoundResponse(Response):
@@ -507,10 +585,10 @@ class DeviceNotFoundResponse(Response):
         return self._device_category
 
     def __repr__(self) -> str:
-        return "<DeviceNotFoundResponse: Get '{}', Category '{}'{}>".\
-            format("By Index" if self._command_name.startswith(CMD_DEVBYIDX_PREFIX) else "By Zone",
+        return "<{}: device_category.description={}{}>".\
+            format(self.__class__.__name__,
                    self._device_category.description,
-                   '' if not self._is_error else " [ERROR]")
+                   '' if not self._is_error else ", is_error")
 
 
 class DeviceAddingResponse(Response):
@@ -532,8 +610,9 @@ class DeviceAddingResponse(Response):
         return self._device_category
 
     def __repr__(self) -> str:
-        return "<DeviceAddingResponse: Category '{}'>".\
-            format(self._device_category.description)
+        return "<{}: device_category.description={}>".\
+            format(self.__class__.__name__,
+                   self._device_category.description)
 
 
 class DeviceAddedResponse(DeviceSettingsResponse):
@@ -558,7 +637,7 @@ class DeviceDeletedResponse(Response):
         self._command_name = text[0:2]
         self._device_category = DC_ALL_LOOKUP[text[1:2]]
         text = text[3:]
-        self._index = int(text[0:2], 16)
+        self._index = from_ascii_hex(text[0:2])
 
     @property
     def command_name(self) -> str:
@@ -576,8 +655,9 @@ class DeviceDeletedResponse(Response):
         return self._index
 
     def __repr__(self) -> str:
-        return "<DeviceDeletedResponse: Category '{}', Index #{}>".\
-            format(self._device_category.description,
+        return "<{}: device_category.description='{}', index={}>".\
+            format(self.__class__.__name__,
+                   self._device_category.description,
                    self._index)
 
 
@@ -590,10 +670,6 @@ class ClearedStatusResponse(Response):
     @property
     def command_name(self) -> str:
         return CMD_CLEAR_STATUS
-
-    def __repr__(self) -> str:
-        return "<ClearedStatusResponse: Cleared status on base unit{}>".\
-            format('' if not self._is_error else " [ERROR]")
 
 
 class ROMVersionResponse(Response):
@@ -615,9 +691,10 @@ class ROMVersionResponse(Response):
         return self._version
 
     def __repr__(self) -> str:
-        return "<ROMVersionResponse: '{}'{}>".format(
+        return "<{}: version={}{}>".format(
+            self.__class__.__name__,
             self._version,
-            '' if not self._is_error else " [ERROR]")
+            '' if not self._is_error else ", is_error")
 
 
 class ExitDelayResponse(Response):
@@ -647,10 +724,11 @@ class ExitDelayResponse(Response):
         return self._was_set
 
     def __repr__(self) -> str:
-        return "<ExitDelayResponse: Exit delay {} {} seconds{}>".\
-            format('is' if not self._was_set else "was set to",
+        return "<{}: exit_delay={}{}{}>".\
+            format(self.__class__.__name__,
                    self._exit_delay,
-                   '' if not self._is_error else " [ERROR]")
+                   '' if not self._was_set else ", was_set",
+                   '' if not self._is_error else ", is_error")
 
 
 class EntryDelayResponse(Response):
@@ -680,10 +758,11 @@ class EntryDelayResponse(Response):
         return self._was_set
 
     def __repr__(self) -> str:
-        return "<EntryDelayResponse: Entry delay {} {} seconds{}>".\
-            format('is' if not self._was_set else "was set to",
+        return "<{}: entry_delay={}{}{}>".\
+            format(self.__class__.__name__,
                    self._entry_delay,
-                   '' if not self._is_error else " [ERROR]")
+                   '' if not self._was_set else ", was_set",
+                   '' if not self._is_error else ", is_error")
 
 
 class SwitchResponse(Response):
@@ -697,10 +776,7 @@ class SwitchResponse(Response):
         if self._was_set:
             text = text[1:]
         self._switch_state_value = from_ascii_hex(text[0:1])
-        if SwitchState.has_value(self._switch_state_value):
-            self._switch_state = SwitchState(self._switch_state_value)
-        else:
-            self._switch_state = None
+        self._switch_state = SwitchState.parseint(self._switch_state_value)
         if RESPONSE_ERROR == text[1:]:
             self._is_error = True
 
@@ -730,12 +806,13 @@ class SwitchResponse(Response):
         return self._was_set
 
     def __repr__(self) -> str:
-        return "<SwitchResponse: {} {} 0x{:01x} ({}){}>".\
-            format(self._switch_number.name,
-                   'is' if not self._was_set else "was set to",
+        return "<{}: switch_number={}, switch_state_value={:01x}, switch_state={}{}{}>".\
+            format(self.__class__.__name__,
+                   str(self._switch_number),
                    self._switch_state_value,
-                   'Unknown' if self._switch_state is None else self._switch_state.name,
-                   '' if not self._is_error else " [ERROR]")
+                   str(self._switch_state),
+                   '' if not self._was_set else ", was_set",
+                   '' if not self._is_error else ", is_error")
 
 
 class EventLogResponse(Response):
@@ -744,20 +821,14 @@ class EventLogResponse(Response):
     def __init__(self, text: str):
         Response.__init__(self)
         text = text[len(CMD_EVENT_LOG):]
-        self._event_qualifier_value = int(text[0:1], 16)
-        if ContactIDEventQualifier.has_value(self._event_qualifier_value):
-            self._event_qualifier = ContactIDEventQualifier(self._event_qualifier_value)
-        else:
-            self._event_qualifier = None
-        self._event_code_value = int(text[1:4], 16)
-        if ContactIDEventCode.has_value(self._event_code_value):
-            self._event_code = ContactIDEventCode(self._event_code_value)
-        else:
-            self._event_code = None
-        group_partition = int(text[4:6], 16)
-        # self._?? = int(text[6:7], 16)
-        self._device_category = DC_ALL[int(text[7:8], 16)]
-        zone_user = int(text[8:10], 16)
+        self._event_qualifier_value = from_ascii_hex(text[0:1])
+        self._event_qualifier = ContactIDEventQualifier.parseint(self._event_qualifier_value)
+        self._event_code_value = from_ascii_hex(text[1:4])
+        self._event_code = ContactIDEventCode.parseint(self._event_code_value)
+        group_partition = from_ascii_hex(text[4:6])
+        # self._?? = from_ascii_hex(text[6:7])
+        self._device_category = DC_ALL[from_ascii_hex(text[7:8])]
+        zone_user = from_ascii_hex(text[8:10])
         if self._device_category == DC_BASEUNIT:
             self._group_number = None
             self._unit_number = None
@@ -766,10 +837,11 @@ class EventLogResponse(Response):
             self._group_number = group_partition
             self._unit_number = zone_user
             self._user_id = None
-        self._action = DC_ALL[int(text[10:12], 16)]
+        self._action = DC_ALL[from_ascii_hex(text[10:12])]
         self._logged_date = text[12:14] + '/' + text[14:16]
-        self._logged_time = text[16:18] + ':' + text[18:20]
-        self._last_index = int(text[20:23], 16)
+        self._logged_time = datetime.strptime(
+            text[16:18] + text[18:20], "%H%M").time()
+        self._last_index = from_ascii_hex(text[20:23])
 
     @property
     def action(self) -> DeviceCategory:
@@ -828,8 +900,8 @@ class EventLogResponse(Response):
         return self._logged_date
 
     @property
-    def logged_time(self) -> str:
-        """Time the event was logged; HH:MM format."""
+    def logged_time(self) -> time:
+        """Time the event was logged."""
         return self._logged_time
 
     @property
@@ -856,15 +928,16 @@ class EventLogResponse(Response):
             zone_user = ", Zone '{}'".format(self.zone)
         elif self._user_id is not None:
             zone_user = ", User {:02x}".format(self._user_id)
-        return "<{}: {} {:03x} ({}), Category '{}'{}, Logged '{} {}'>". \
+        return "<{}: event_qualifier_value={:01x}, event_qualifier={}, event_code_value={:03x}, event_code={}, device_category.description={}{}, logged_date={}, logged_time={}>". \
             format(self.__class__.__name__,
-                   self._event_qualifier_value if not self._event_qualifier else self._event_qualifier.name,
+                   self._event_qualifier_value,
+                   str(self._event_qualifier),
                    self._event_code_value,
-                   "Unknown" if not self._event_code else self._event_code.name,
+                   str(self._event_code),
                    self._device_category.description,
                    zone_user,
                    self._logged_date,
-                   self._logged_time)
+                   self._logged_time.strftime('%H:%M'))
 
 
 class EventLogNotFoundResponse(Response):
@@ -885,19 +958,16 @@ class SensorLogResponse(Response):
     def __init__(self, text: str):
         Response.__init__(self)
         text = text[len(CMD_SENSOR_LOG):]
-        self._group_number = int(text[0:2], 16)
-        self._unit_number = int(text[2:4], 16)
-        self._logged_date = text[4:6]
-        self._logged_time = text[6:8] + ':' + text[8:10]
-        # I'm guessing this was created before the AC Power Meter TX-3AC,
-        # since the message_attribute doesn't exist and the reading cannot
-        # be adjusted accordingly.
-        self._reading = int(text[10:12], 16)
-        if self._reading == 0x80:
-            self._reading = None
-        elif self._reading >= 0x80:
-            self._reading = 0 - (0x100 - self._reading)
-        self._last_index = int(text[12:15], 16)
+        self._group_number = from_ascii_hex(text[0:2])
+        self._unit_number = from_ascii_hex(text[2:4])
+        self._logged_day = int(text[4:6])
+        self._logged_time = datetime.strptime(
+            text[6:8] + text[8:10], "%H%M").time()
+        # I'm guessing the sensor log was created before the AC Power Meter,
+        # since the message_attribute doesn't exist and the reading is always
+        # assumed to be a signed byte.
+        self._reading = decode_value_using_ma(MA_NONE, from_ascii_hex(text[10:12]))
+        self._last_index = from_ascii_hex(text[12:15])
 
     @property
     def command_name(self) -> str:
@@ -915,13 +985,13 @@ class SensorLogResponse(Response):
         return self._last_index
 
     @property
-    def logged_date(self) -> str:
-        """Date the event was logged; dd format, month and year omitted."""
-        return self._logged_date
+    def logged_day(self) -> int:
+        """Day of month the event was logged."""
+        return self._logged_day
 
     @property
-    def logged_time(self) -> str:
-        """Time the event was logged; HH:MM format."""
+    def logged_time(self) -> time:
+        """Time the event was logged."""
         return self._logged_time
 
     @property
@@ -940,12 +1010,12 @@ class SensorLogResponse(Response):
         return '{:02x}-{:02x}'.format(self._group_number, self._unit_number)
 
     def __repr__(self) -> str:
-        return "<{}: Zone '{}', Reading {}, Logged '{}/{}'>". \
+        return "<{}: zone={}, reading={}, logged_day={}, logged_time={}>". \
             format(self.__class__.__name__,
                    self.zone,
                    self._reading,
-                   self._logged_date,
-                   self._logged_time)
+                   self._logged_day,
+                   self._logged_time.strftime('%H:%M'))
 
 
 class SensorLogNotFoundResponse(Response):

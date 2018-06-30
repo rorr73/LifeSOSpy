@@ -5,7 +5,8 @@ if float('%s.%s' % sys.version_info[:2]) >= 3.6:
     from enum import IntFlag
 else:
     from aenum import IntFlag
-from typing import Dict, Any
+from lifesospy.const import *
+from typing import Dict, Any, Optional, Union
 
 
 def to_ascii_hex(value: int, digits: int) -> str:
@@ -43,6 +44,15 @@ def from_ascii_hex(text:str) -> int:
     return value
 
 
+def is_ascii_hex(text:str) -> bool:
+    """Indicates if specified text contains only ascii hex characters."""
+    try:
+        from_ascii_hex(text)
+        return True
+    except ValueError:
+        return False
+
+
 def obj_to_dict(obj: Any) -> Dict[str, Any]:
     """Converts to a dict of attributes for easier JSON serialisation."""
     from enum import IntEnum
@@ -54,12 +64,60 @@ def obj_to_dict(obj: Any) -> Dict[str, Any]:
         if hasattr(value, 'as_dict'):
             value = value.as_dict()
         elif isinstance(value, IntFlag):
-            value = str(value)[len(value.__class__.__name__)+1:]
+            value = str(value)
             if value == '0':
                 value = None
             else:
                 value = value.split('|')
         elif isinstance(value, Enum):
-            value = value.name
+            value = str(value)
         data[name] = value
     return data
+
+
+def decode_value_using_ma(message_attribute: int, value: int) -> \
+        Optional[Union[int, float]]:
+    """Decode special sensor value using the message attribute."""
+    if message_attribute == MA_TX3AC_100A:
+        # TX-3AC in 100A mode; use value as-is, with 0xFE indicating null
+        if value == 0xfe:
+            return None
+        else:
+            return value
+    elif message_attribute == MA_TX3AC_10A:
+        # TX-3AC in 10A mode; shift decimal point, with 0xFE indicating null
+        if value == 0xfe:
+            return None
+        else:
+            return value / 10
+    else:
+        # Signed byte, with 0x80 indicating null
+        if value == 0x80:
+            return None
+        elif value >= 0x80:
+            return 0 - (0x100 - value)
+        else:
+            return value
+
+def encode_value_using_ma(message_attribute: int, value: Optional[Union[int, float]]) -> int:
+    """Encode special sensor value using the message attribute."""
+    if message_attribute == MA_TX3AC_100A:
+        # TX-3AC in 100A mode; use value as-is, with 0xFE indicating null
+        if value is None:
+            return 0xfe
+        else:
+            return int(value)
+    elif message_attribute == MA_TX3AC_10A:
+        # TX-3AC in 10A mode; shift decimal point, with 0xFE indicating null
+        if value is None:
+            return 0xfe
+        else:
+            return int(value * 10)
+    else:
+        # Signed byte, with 0x80 indicating null
+        if value is None:
+            return 0x80
+        elif value < 0:
+            return 0x100 + int(value)
+        else:
+            return int(value)

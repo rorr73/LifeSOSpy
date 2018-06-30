@@ -28,15 +28,9 @@ class ContactID(object):
         if not self._message_type in [0x18, 0x98]:
             raise ValueError("ContactID message type is invalid.")
         self._event_qualifier_value = int(text[6:7], 16)
-        if EventQualifier.has_value(self._event_qualifier_value):
-            self._event_qualifier = EventQualifier(self._event_qualifier_value)
-        else:
-            self._event_qualifier = None
+        self._event_qualifier = EventQualifier.parseint(self._event_qualifier_value)
         self._event_code_value = int(text[7:10], 16)
-        if EventCode.has_value(self._event_code_value):
-            self._event_code = EventCode(self._event_code_value)
-        else:
-            self._event_code = None
+        self._event_code = EventCode.parseint(self._event_code_value)
         group_partition = int(text[10:12], 16)
         # Spec says zone/user uses next 3 digits; however LifeSOS uses the
         # first digit for device category index, and the remaining two digits
@@ -140,11 +134,13 @@ class ContactID(object):
             zone_user = ", Zone '{}'".format(self.zone)
         elif self._user_id is not None:
             zone_user = ", User {:02x}".format(self._user_id)
-        return "<ContactID: Account {:04x}, {} {:03x} ({}), Category '{}'{}>".\
-            format(self._account_number,
-                   self._event_qualifier_value if not self._event_qualifier else self._event_qualifier.name,
+        return "<{}: account_number={:04x}, event_qualifier_value={:01x}, event_qualifier={}, event_code_value={:03x}, event_code={}, device_category.description={}{}>".\
+            format(self.__class__.__name__,
+                   self._account_number,
+                   self._event_qualifier_value,
+                   str(self._event_qualifier),
                    self._event_code_value,
-                   "Unknown" if not self._event_code else self._event_code.name,
+                   str(self._event_code),
                    self._device_category.description,
                    zone_user)
 

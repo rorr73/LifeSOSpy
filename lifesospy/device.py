@@ -19,20 +19,15 @@ class Device(object):
     """
 
     # Property names
-    PROP_ALARM_HIGH_LIMIT = 'alarm_high_limit'
-    PROP_ALARM_LOW_LIMIT = 'alarm_low_limit'
     PROP_CATEGORY = 'category'
     PROP_CHARACTERISTICS = 'characteristics'
-    PROP_CONTROL_HIGH_LIMIT = 'control_high_limit'
-    PROP_CONTROL_LOW_LIMIT = 'control_low_limit'
-    PROP_CURRENT_READING = 'current_reading'
     PROP_ENABLE_STATUS = 'enable_status'
     PROP_GROUP_NUMBER = 'group_number'
     PROP_ID = 'id'
     PROP_IS_CLOSED = 'is_closed'
+    PROP_MESSAGE_ATTRIBUTE = 'message_attribute'
     PROP_RSSI_BARS = 'rssi_bars'
     PROP_RSSI_DB = 'rssi_db'
-    PROP_SPECIAL_STATUS = 'special_status'
     PROP_SWITCHES = 'switches'
     PROP_TYPE = 'type'
     PROP_TYPE_VALUE = 'type_value'
@@ -48,9 +43,10 @@ class Device(object):
         self._set_field_values({
             Device.PROP_ID: response.device_id,
             Device.PROP_CATEGORY: response.device_category,
+            Device.PROP_MESSAGE_ATTRIBUTE: response.message_attribute,
             Device.PROP_TYPE_VALUE: response.device_type_value,
             Device.PROP_TYPE: response.device_type,
-            Device.PROP_CHARACTERISTICS: response.device_characteristics
+            Device.PROP_CHARACTERISTICS: response.device_characteristics,
         })
         self._handle_response(response)
         self._notify_properties_changed = True
@@ -58,16 +54,6 @@ class Device(object):
     #
     # PROPERTIES
     #
-
-    @property
-    def alarm_high_limit(self) -> Optional[int]:
-        """Alarm high limit setting for a special sensor."""
-        return self._get_field_value(Device.PROP_ALARM_HIGH_LIMIT)
-
-    @property
-    def alarm_low_limit(self) -> Optional[int]:
-        """Alarm low limit setting for a special sensor."""
-        return self._get_field_value(Device.PROP_ALARM_LOW_LIMIT)
 
     @property
     def category(self) -> DeviceCategory:
@@ -78,21 +64,6 @@ class Device(object):
     def characteristics(self) -> DCFlags:
         """Flags indicating the device characteristics."""
         return self._get_field_value(Device.PROP_CHARACTERISTICS)
-
-    @property
-    def control_high_limit(self) -> Optional[int]:
-        """Control high limit setting for a special sensor."""
-        return self._get_field_value(Device.PROP_CONTROL_HIGH_LIMIT)
-
-    @property
-    def control_low_limit(self) -> Optional[int]:
-        """Control low limit setting for a special sensor."""
-        return self._get_field_value(Device.PROP_CONTROL_LOW_LIMIT)
-
-    @property
-    def current_reading(self) -> Optional[int]:
-        """Current reading for a special sensor."""
-        return self._get_field_value(Device.PROP_CURRENT_READING)
 
     @property
     def enable_status(self) -> ESFlags:
@@ -115,6 +86,11 @@ class Device(object):
         return self._get_field_value(Device.PROP_IS_CLOSED)
 
     @property
+    def message_attribute(self) -> int:
+        """Message attribute; used to encode/decode Special device values."""
+        return self._get_field_value(Device.PROP_MESSAGE_ATTRIBUTE)
+
+    @property
     def rssi_bars(self) -> int:
         """Received Signal Strength Indication, from 0 to 4 bars."""
         return self._get_field_value(Device.PROP_RSSI_BARS)
@@ -123,11 +99,6 @@ class Device(object):
     def rssi_db(self) -> int:
         """Received Signal Strength Indication, in dB."""
         return self._get_field_value(Device.PROP_RSSI_DB)
-
-    @property
-    def special_status(self) -> Optional[SSFlags]:
-        """Special sensor status flags."""
-        return self._get_field_value(Device.PROP_SPECIAL_STATUS)
 
     @property
     def switches(self) -> Optional[SwitchFlags]:
@@ -200,14 +171,15 @@ class Device(object):
 
     def __repr__(self) -> str:
         """Provides an info string for the device."""
-        return "<Device: Id {:06x}, Type {:02x} ({}), Category '{}', Zone '{}', RSSI {} dB{}, {}, {}, {}>".\
-            format(self.id,
+        return "<{}: id={:06x}, type_value={:02x}, type={}, category.description={}, zone={}, rssi_db={}{}, characteristics={}, enable_status={}, switches={}>".\
+            format(self.__class__.__name__,
+                   self.id,
                    self.type_value,
-                   'Unknown' if self.type is None else self.type.name,
+                   str(self.type),
                    self.category.description,
                    self.zone,
                    self.rssi_db,
-                   '' if self.type_value != DeviceType.DoorMagnet else ", IsClosed={}".format(self.is_closed),
+                   '' if self.type_value != DeviceType.DoorMagnet else ", is_closed={}".format(self.is_closed),
                    str(self.characteristics),
                    str(self.enable_status),
                    str(self.switches))
@@ -227,11 +199,13 @@ class Device(object):
                 is_closed = True
 
         # Update properties
-        self._set_field_values({
+        changes: Dict[str, Any] = {
             Device.PROP_IS_CLOSED: is_closed,
             Device.PROP_RSSI_BARS: device_event.rssi_bars,
             Device.PROP_RSSI_DB: device_event.rssi_db,
-        })
+        }
+        changes.update(self._get_device_event_changes(device_event))
+        self._set_field_values(changes)
 
         # Notify via callback if needed
         if self._on_event and device_event.event_code is not None:
@@ -242,34 +216,40 @@ class Device(object):
                     "Unhandled exception in on_event callback",
                     exc_info=True)
 
+    def _get_device_event_changes(self, device_event: DeviceEvent) -> Dict[str, Any]:
+        # Override this to provide any additional property changes
+        return {}
+
     def _handle_response(self, response: Union[DeviceInfoResponse,
                                                DeviceSettingsResponse]):
         # Update properties
         if isinstance(response, DeviceInfoResponse):
-            self._set_field_values({
-                Device.PROP_ALARM_HIGH_LIMIT: response.alarm_high_limit,
-                Device.PROP_ALARM_LOW_LIMIT: response.alarm_low_limit,
-                Device.PROP_CURRENT_READING: response.current_reading,
-                Device.PROP_CONTROL_HIGH_LIMIT: response.control_high_limit,
-                Device.PROP_CONTROL_LOW_LIMIT: response.control_low_limit,
-                Device.PROP_IS_CLOSED: response.is_closed,
+            changes = {
                 Device.PROP_ENABLE_STATUS: response.enable_status,
                 Device.PROP_GROUP_NUMBER: response.group_number,
+                Device.PROP_IS_CLOSED: response.is_closed,
                 Device.PROP_RSSI_BARS: response.rssi_bars,
                 Device.PROP_RSSI_DB: response.rssi_db,
-                Device.PROP_SPECIAL_STATUS: response.special_status,
                 Device.PROP_SWITCHES: response.switches,
                 Device.PROP_UNIT_NUMBER: response.unit_number,
                 Device.PROP_ZONE: response.zone,
-            })
+            }
         elif isinstance(response, DeviceSettingsResponse):
-            self._set_field_values({
+            changes = {
                 Device.PROP_ENABLE_STATUS: response.enable_status,
                 Device.PROP_GROUP_NUMBER: response.group_number,
                 Device.PROP_SWITCHES: response.switches,
                 Device.PROP_UNIT_NUMBER: response.unit_number,
                 Device.PROP_ZONE: response.zone,
-            })
+            }
+        else:
+            return
+        changes.update(self._get_response_changes(response))
+        self._set_field_values(changes)
+
+    def _get_response_changes(self, response: Union[DeviceInfoResponse, DeviceSettingsResponse]) -> Dict[str, Any]:
+        # Override this to provide any additional property changes
+        return {}
 
     def _get_field_value(self, property_name: str) -> Any:
         # Get backing field value for specified property name
@@ -311,6 +291,159 @@ class Device(object):
                     exc_info=True)
 
 
+class SpecialDevice(Device):
+    """
+    Represents a Special device that has been enrolled on the base unit.
+    """
+
+    # Property names
+    PROP_CONTROL_HIGH_LIMIT = 'control_high_limit'
+    PROP_CONTROL_LIMIT_FIELDS_EXIST = 'control_limit_fields_exist'
+    PROP_CONTROL_LOW_LIMIT = 'control_low_limit'
+    PROP_CURRENT_READING = 'current_reading'
+    PROP_HIGH_LIMIT = 'high_limit'
+    PROP_LOW_LIMIT = 'low_limit'
+    PROP_SPECIAL_STATUS = 'special_status'
+
+    def __init__(self, response: DeviceInfoResponse):
+        Device.__init__(self, response)
+
+        # Init fixed and variable property values
+        self._notify_properties_changed = False
+        self._set_field_values({
+            SpecialDevice.PROP_CONTROL_LIMIT_FIELDS_EXIST: response.control_limit_fields_exist,
+        })
+        self._handle_response(response)
+        self._notify_properties_changed = True
+
+    #
+    # PROPERTIES
+    #
+
+    @property
+    def control_high_limit(self) -> Optional[Union[int, float]]:
+        """
+        Control high limit setting for a special sensor.
+
+        For LS-10/LS-20 base units only.
+        """
+        return self._get_field_value(SpecialDevice.PROP_CONTROL_HIGH_LIMIT)
+
+    @property
+    def control_limit_fields_exist(self) -> bool:
+        """
+        True if control limit fields exist; otherwise, False.
+
+        Only the LS-10/LS-20 base units provide these separate control limits,
+        with high_limit/low_limit exclusively holding the alarm limits.
+        On the LS-30, high_limit/low_limit can be either alarm OR control
+        limits (mode indicated by the special_status ControlAlarm bit flag).
+        """
+        return self._get_field_value(SpecialDevice.PROP_CONTROL_LIMIT_FIELDS_EXIST)
+
+    @property
+    def control_low_limit(self) -> Optional[Union[int, float]]:
+        """
+        Control low limit setting for a special sensor.
+
+        For LS-10/LS-20 base units only.
+        """
+        return self._get_field_value(SpecialDevice.PROP_CONTROL_LOW_LIMIT)
+
+    @property
+    def current_reading(self) -> Optional[Union[int, float]]:
+        """Current reading for a special sensor."""
+        return self._get_field_value(SpecialDevice.PROP_CURRENT_READING)
+
+    @property
+    def high_limit(self) -> Optional[Union[int, float]]:
+        """
+        High limit setting for a special sensor.
+
+        For LS-10/LS-20 base units this is the alarm high limit.
+        For LS-30 base units, this is either alarm OR control high limit,
+        as indicated by special_status ControlAlarm bit flag.
+        """
+        return self._get_field_value(SpecialDevice.PROP_HIGH_LIMIT)
+
+    @property
+    def low_limit(self) -> Optional[Union[int, float]]:
+        """
+        Low limit setting for a special sensor.
+
+        For LS-10/LS-20 base units this is the alarm low limit.
+        For LS-30 base units, this is either alarm OR control low limit,
+        as indicated by special_status ControlAlarm bit flag.
+        """
+        return self._get_field_value(SpecialDevice.PROP_LOW_LIMIT)
+
+    @property
+    def special_status(self) -> SSFlags:
+        """Special sensor status flags."""
+        return self._get_field_value(SpecialDevice.PROP_SPECIAL_STATUS)
+
+    #
+    # METHODS - Public
+    #
+
+    def __repr__(self) -> str:
+        """Provides an info string for the device."""
+        special = ", current_reading={}, special_status={}, high_limit={}, low_limit={}".format(
+            self.current_reading,
+            str(self.special_status),
+            self.high_limit,
+            self.low_limit)
+        if self.control_limit_fields_exist:
+            special += ", control_high_limit={}, control_low_limit={}".format(
+                self.control_high_limit,
+                self.control_low_limit)
+        text = Device.__repr__(self)
+        text = text[:len(text)-1] + special + text[len(text)-1:]
+        return text
+
+    #
+    # METHODS - Private / Internal
+    #
+
+    def _get_device_event_changes(self, device_event: DeviceEvent) -> Dict[str, Any]:
+        return {
+            SpecialDevice.PROP_CURRENT_READING: device_event.current_reading,
+        }
+
+    def _get_response_changes(self, response: Union[DeviceInfoResponse, DeviceSettingsResponse]) -> Dict[str, Any]:
+        changes = {}
+        if isinstance(response, DeviceInfoResponse):
+            changes.update({
+                SpecialDevice.PROP_CURRENT_READING: response.current_reading,
+                SpecialDevice.PROP_HIGH_LIMIT: response.high_limit,
+                SpecialDevice.PROP_LOW_LIMIT: response.low_limit,
+                SpecialDevice.PROP_SPECIAL_STATUS: response.special_status,
+            })
+            if self.control_limit_fields_exist:
+                changes.update({
+                    SpecialDevice.PROP_CONTROL_HIGH_LIMIT: response.control_high_limit,
+                    SpecialDevice.PROP_CONTROL_LOW_LIMIT: response.control_low_limit,
+                })
+        elif isinstance(response, DeviceSettingsResponse) and response.special_fields_exist:
+            changes.update({
+                SpecialDevice.PROP_CURRENT_READING: decode_value_using_ma(
+                    self.message_attribute, response.current_reading_encoded),
+                SpecialDevice.PROP_HIGH_LIMIT: decode_value_using_ma(
+                    self.message_attribute, response.high_limit_encoded),
+                SpecialDevice.PROP_LOW_LIMIT: decode_value_using_ma(
+                    self.message_attribute, response.low_limit_encoded),
+                SpecialDevice.PROP_SPECIAL_STATUS: response.special_status,
+            })
+            if self.control_limit_fields_exist:
+                changes.update({
+                    SpecialDevice.PROP_CONTROL_HIGH_LIMIT: decode_value_using_ma(
+                        self.message_attribute, response.control_high_limit_encoded),
+                    SpecialDevice.PROP_CONTROL_LOW_LIMIT: decode_value_using_ma(
+                        self.message_attribute, response.control_low_limit_encoded),
+                })
+        return changes
+
+
 class DeviceCollection(Sized, Iterable, Container):
     """Collection of devices."""
 
@@ -344,18 +477,15 @@ class DeviceCollection(Sized, Iterable, Container):
 
     def __repr__(self) -> str:
         """Provides an info string for the device collection."""
-        len = self.__len__()
-        if len == 0:
-            return "<DeviceCollection: 0 Devices>"
-        else:
-            category_count: Dict[DeviceCategory, int] = {}
-            for device in self._devices.values():
-                category_count[device.category] = \
-                    category_count.get(device.category, 0) + 1
-            return "<DeviceCollection: {} Devices ({})>".format(
-                self.__len__(),
-                ", ".join([str(cc[1]) + " " + cc[0].description
-                           for cc in category_count.items()]))
+        category_count: Dict[DeviceCategory, int] = {}
+        for device in self._devices.values():
+            category_count[device.category] = \
+                category_count.get(device.category, 0) + 1
+        return "<{}: {} Total ({})>".format(
+            self.__class__.__name__,
+            self.__len__(),
+            ", ".join([str(cc[1]) + " " + cc[0].description
+                       for cc in category_count.items()]))
 
     def get(self, id: int) -> Optional[Device]:
         """Get device using the specified ID, or None if not found."""

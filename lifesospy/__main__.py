@@ -81,6 +81,9 @@ def _handle_interactive_baseunit_tests(
         "'change ID G U ES SW' - change device settings, where ID is 6 char hex \n"
         "                        device id, G = group#, U = unit#, ES = enable \n"
         "                        status flags, SW = switch flags\n"
+        "'changespecial ID G U ES SW SS HL LL (CH CL)' - same as change, plus\n"
+        "                        SS = special status flags, HL/LL = high/low,\n"
+        "                        CH/CL = control high/low (if supported)"
         "'delete ID' - delete device, where ID is 6 char hex device id\n"
         "'eventlog (#)' - get event log, optionally get only # most recent\n"
         "'sensorlog (#)' - get sensor log, optionally get only # most recent")
@@ -102,15 +105,15 @@ def _handle_interactive_baseunit_tests(
                 print(device)
 
         # Set operation mode
-        elif line in (str(op.name).lower() for op in OperationMode):
+        elif line in (str(op).lower() for op in OperationMode):
             async def async_set_operation_mode(operation_mode: OperationMode):
                 try:
                     await baseunit.async_set_operation_mode(operation_mode)
-                    print("Operation mode was set to {}.".format(operation_mode.name))
+                    print("Operation mode was set to {}.".format(operation_mode))
                 except Exception:
                     traceback.print_exc()
 
-            operation_mode = next(op for op in OperationMode if str(op.name).lower() == line)
+            operation_mode = next(op for op in OperationMode if str(op).lower() == line)
             asyncio.run_coroutine_threadsafe(
                 async_set_operation_mode(operation_mode), loop)
 
@@ -145,11 +148,11 @@ def _handle_interactive_baseunit_tests(
                 try:
                     await baseunit.async_set_switch_state(switch_number, new_state)
                     print("Switch {} is now {}.".format(
-                        switch_number.name, "on" if new_state else "off"))
+                        str(switch_number), "on" if new_state else "off"))
                 except Exception:
                     traceback.print_exc()
 
-            switch_number = next((item for item in SwitchNumber if item.name == line.upper()), None)
+            switch_number = next((item for item in SwitchNumber if str(item) == line.upper()), None)
             if switch_number is None:
                 print("Invalid switch number.")
                 continue
@@ -177,7 +180,7 @@ def _handle_interactive_baseunit_tests(
             asyncio.run_coroutine_threadsafe(
                 async_add_device(device_category), loop)
 
-        # Change device settings on the base unit
+        # Change settings for device on the base unit
         # 'change 123456 01 02 4410 0000' - change device 123456 to
         #  zone 01-02, enable status flags 4410 and switch flags 0000
         elif line.startswith('change '):
@@ -211,6 +214,57 @@ def _handle_interactive_baseunit_tests(
                 async_change_device(
                     device_id, group_number, unit_number, enable_status,
                     switches), loop)
+
+        # Change settings for 'Special' device on the base unit
+        # 'changespecial 123456 01 02 4410 0000 00 40 none 30 10' - change
+        #  device 123456 to zone 01-02, enable status flags 4410,
+        #  switch flags 0000, special status flags 00, alarm high 40 degrees,
+        #  no alarm low, control high 30 degrees, control low 10 degrees.
+        elif line.startswith('changespecial '):
+            async def async_change_special_device(
+                    device_id: int, group_number: int, unit_number: int,
+                    enable_status: ESFlags, switches: SwitchFlags,
+                    special_status: SSFlags,
+                    high_limit: Optional[Union[int, float]],
+                    low_limit: Optional[Union[int, float]],
+                    control_high_limit: Optional[Union[int, float]],
+                    control_low_limit: Optional[Union[int, float]]):
+                try:
+                    await baseunit.async_change_special_device(
+                        device_id, group_number, unit_number, enable_status,
+                        switches, special_status, high_limit, low_limit,
+                        control_high_limit, control_low_limit)
+                    print("Changed settings for device. New device settings:\n"
+                          + str(baseunit.devices[device_id]))
+                except Exception:
+                    traceback.print_exc()
+
+            args = line.split()
+            try:
+                device_id = int(args[1], 16)
+            except Exception:
+                print("Invalid device id.")
+                continue
+            try:
+                group_number = int(args[2], 16)
+                unit_number = int(args[3], 16)
+                enable_status = ESFlags(int(args[4], 16))
+                switches = SwitchFlags(int(args[5], 16))
+                special_status = SSFlags(int(args[6], 16))
+                high_limit = _parse_special_value(args[7])
+                low_limit = _parse_special_value(args[8])
+                control_high_limit = None \
+                    if len(args) <= 9 else _parse_special_value(args[9])
+                control_low_limit = None \
+                    if len(args) <= 10 else _parse_special_value(args[10])
+            except Exception:
+                print("Invalid args.")
+                continue
+            asyncio.run_coroutine_threadsafe(
+                async_change_special_device(
+                    device_id, group_number, unit_number, enable_status,
+                    switches, special_status, high_limit, low_limit,
+                    control_high_limit, control_low_limit), loop)
 
         # Delete device with specified id
         # 'delete 123456' - delete device 123456
@@ -313,6 +367,14 @@ def _handle_interactive_baseunit_tests(
                     continue
             asyncio.run_coroutine_threadsafe(
                 async_get_sensor_log(baseunit, max_count), loop)
+
+def _parse_special_value(text: str) -> Optional[Union[int, float]]:
+    if text == 'none':
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return float(text)
 
 
 if __name__ == "__main__":

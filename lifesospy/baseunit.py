@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 
 from lifesospy.asynchelper import AsyncHelper
@@ -7,7 +6,7 @@ from lifesospy.client import Client
 from lifesospy.command import *
 from lifesospy.const import *
 from lifesospy.contactid import ContactID
-from lifesospy.device import Device, DeviceCollection
+from lifesospy.device import *
 from lifesospy.devicecategory import *
 from lifesospy.deviceevent import DeviceEvent
 from lifesospy.enums import *
@@ -305,6 +304,16 @@ class BaseUnit(AsyncHelper):
         # Lookup device using zone to obtain an accurate index and current
         # values, which will be needed to perform the change command
         device = self._devices[device_id]
+
+        # If it is a Special device, automatically use the other function
+        # instead (without changing any of the special fields)
+        if isinstance(device, SpecialDevice):
+            await self.async_change_special_device(
+                device_id, group_number, unit_number, enable_status, switches,
+                device.special_status, device.high_limit, device.low_limit,
+                device.control_high_limit, device.control_low_limit)
+            return
+
         response = await self._client.async_execute(
             GetDeviceCommand(device.category, device.group_number, device.unit_number))
         if isinstance(response, DeviceInfoResponse):
@@ -320,9 +329,10 @@ class BaseUnit(AsyncHelper):
     async def async_change_special_device(
             self, device_id: int, group_number: int, unit_number: int,
             enable_status: ESFlags, switches: SwitchFlags,
-            special_status: SSFlags, alarm_high_limit: Optional[int],
-            alarm_low_limit: Optional[int], control_high_limit: Optional[int],
-            control_low_limit: Optional[int]) -> None:
+            special_status: SSFlags, high_limit: Optional[Union[int, float]],
+            low_limit: Optional[Union[int, float]],
+            control_high_limit: Optional[Union[int, float]],
+            control_low_limit: Optional[Union[int, float]]) -> None:
         """
         Change settings for a 'Special' device on the base unit.
 
@@ -332,8 +342,8 @@ class BaseUnit(AsyncHelper):
         :param enable_status: flags indicating settings to enable
         :param switches: indicates switches that will be activated when device is triggered
         :param special_status: flags indicating 'Special' settings to enable
-        :param alarm_high_limit: trigger alarm for readings higher than value
-        :param alarm_low_limit: trigger alarm for readings lower than value
+        :param high_limit: triggers on readings higher than value
+        :param low_limit: triggers on readings lower than value
         :param control_high_limit: trigger switch for readings higher than value
         :param control_low_limit: trigger switch for readings lower than value
         """
@@ -341,14 +351,28 @@ class BaseUnit(AsyncHelper):
         # Lookup device using zone to obtain an accurate index and current
         # values, which will be needed to perform the change command
         device = self._devices[device_id]
+
+        # Verify it is a Special device
+        if not isinstance(device, SpecialDevice):
+            raise ValueError("Device to be changed is not a Special device")
+
         response = await self._client.async_execute(
             GetDeviceCommand(device.category, device.group_number, device.unit_number))
         if isinstance(response, DeviceInfoResponse):
-            response = await self._client.async_execute(
-                ChangeSpecialDeviceCommand(
+            # Control limits only specified when they are supported
+            if response.control_limit_fields_exist:
+                command = ChangeSpecial2DeviceCommand(
                     device.category, response.index, group_number, unit_number,
-                    enable_status, switches, special_status, alarm_high_limit,
-                    alarm_low_limit, control_high_limit, control_low_limit))
+                    enable_status, switches, response.current_status, response.down_count,
+                    response.message_attribute, response.current_reading, special_status,
+                    high_limit, low_limit, control_high_limit, control_low_limit)
+            else:
+                command = ChangeSpecialDeviceCommand(
+                    device.category, response.index, group_number, unit_number,
+                    enable_status, switches, response.current_status, response.down_count,
+                    response.message_attribute, response.current_reading, special_status,
+                    high_limit, low_limit)
+            response = await self._client.async_execute(command)
             if isinstance(response, DeviceSettingsResponse):
                 device._handle_response(response)
         if isinstance(response, DeviceNotFoundResponse):
@@ -450,9 +474,10 @@ class BaseUnit(AsyncHelper):
 
     def __repr__(self) -> str:
         """Provides an info string for the base unit."""
-        return "<BaseUnit: {}, State '{}'>".\
-            format("Connected" if self.is_connected else "Not Connected",
-                   "Unknown" if self.state is None else self.state.name)
+        return "<{}: is_connected={}, state={}>".\
+            format(self.__class__.__name__,
+                   self.is_connected,
+                   str(self.state))
 
     #
     # METHODS - Private / Internal
@@ -480,6 +505,8 @@ class BaseUnit(AsyncHelper):
         self.create_task(self._async_get_initial_state)
 
     async def _async_get_initial_state(self) -> None:
+        _LOGGER.info("Discovering devices and getting initial state...")
+
         # ROM version may be useful for determining features and commands
         # supported by base unit. May also help with diagnosing issues
         await self._async_execute_retry(
@@ -509,9 +536,9 @@ class BaseUnit(AsyncHelper):
         for switch_number in SwitchNumber:
             await self._async_execute_retry(
                 GetSwitchCommand(switch_number),
-                "Failed to get initial switch {} state".format(switch_number.name))
+                "Failed to get initial switch {} state".format(str(switch_number)))
 
-        _LOGGER.info("Device discovery completed and got initial state info")
+        _LOGGER.info("Device discovery completed and got initial state")
 
     def _handle_connection_lost(self, client: Client, ex: Exception) -> None:
         _LOGGER.error("Connection was lost. Will attempt to reconnect in %s seconds",
@@ -544,7 +571,8 @@ class BaseUnit(AsyncHelper):
                 BaseUnit.PROP_STATE: BaseUnitState.Monitor})
 
         # Alarm has been triggered
-        elif contact_id.event_category == ContactIDEventCategory.Alarm:
+        elif contact_id.event_category == ContactIDEventCategory.Alarm and \
+                contact_id.event_qualifier == ContactIDEventQualifier.Event:
             # When entry delay expired, return state to Away mode
             if self.state == BaseUnitState.AwayEntryDelay:
                 self._set_field_values({
@@ -633,13 +661,19 @@ class BaseUnit(AsyncHelper):
         elif isinstance(response, DateTimeResponse):
             # Log changes to remote date/time
             if response.was_set:
-                _LOGGER.info(response)
+                _LOGGER.info(
+                    "Remote date/time {} {}".format(
+                        'is' if not response.was_set else "was set to",
+                        response.remote_datetime.strftime('%a %d %b %Y %I:%M %p')))
 
         elif isinstance(response, DeviceInfoResponse):
             # Add / Update a device
             device = self._devices.get(response.device_id)
             if device is None:
-                device = Device(response)
+                if response.device_category == DC_SPECIAL:
+                    device = SpecialDevice(response)
+                else:
+                    device = Device(response)
                 self._devices._add(device)
                 if self._on_device_added:
                     try:
@@ -682,7 +716,7 @@ class BaseUnit(AsyncHelper):
         # Set switch to new state
         self._switch_state[switch_number] = new_state
         _LOGGER.debug("Switch %s changed from %s to %s",
-                      switch_number.name,
+                      str(switch_number),
                       "Unknown" if old_state is None else "On" if old_state else "Off",
                       "Unknown" if new_state is None else "On" if new_state else "Off")
 

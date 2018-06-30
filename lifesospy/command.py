@@ -36,7 +36,7 @@ class Command(ABC):
             MARKER_END
 
     def __repr__(self) -> str:
-        return "<{}: '{}'>".format(self.__class__.__name__,
+        return "<{}: {}>".format(self.__class__.__name__,
                                    self.format())
 
     def as_dict(self) -> Dict[str, Any]:
@@ -188,7 +188,9 @@ class GetDeviceCommand(Command):
     @property
     def args(self) -> str:
         """Provides arguments for the command."""
-        return '{:02x}{:02x}'.format(self._group_number, self._unit_number)
+        return '{}{}'.format(
+            to_ascii_hex(self._group_number, 2),
+            to_ascii_hex(self._unit_number, 2))
 
     @property
     def device_category(self) -> DeviceCategory:
@@ -232,9 +234,12 @@ class ChangeDeviceCommand(Command):
     @property
     def args(self) -> str:
         """Provides arguments for the command."""
-        return '{:02x}{:02x}{:02x}{:04x}{:04x}'.format(
-            self._index, self._group_number, self._unit_number,
-            int(self._enable_status), int(self._switches))
+        return '{}{}{}{}{}'.format(
+            to_ascii_hex(self._index, 2),
+            to_ascii_hex(self._group_number, 2),
+            to_ascii_hex(self._unit_number, 2),
+            to_ascii_hex(int(self._enable_status), 2),
+            to_ascii_hex(int(self._switches), 2))
 
     @property
     def device_category(self) -> DeviceCategory:
@@ -273,21 +278,29 @@ class ChangeDeviceCommand(Command):
 
 
 class ChangeSpecialDeviceCommand(ChangeDeviceCommand):
-    """Change settings for a 'Special' device on the base unit."""
+    """
+    Change settings for a 'Special' device on the base unit.
+
+    This version is for the LS-30, which doesn't support separate control
+    limit fields.
+    """
 
     def __init__(self, device_category: DeviceCategory, index: int,
                  group_number: int, unit_number: int, enable_status: ESFlags,
-                 switches: SwitchFlags, special_status: SSFlags,
-                 alarm_high_limit: Optional[int], alarm_low_limit: Optional[int],
-                 control_high_limit: Optional[int], control_low_limit: Optional[int]):
+                 switches: SwitchFlags, current_status: int, down_count: int,
+                 message_attribute: int, current_reading: Union[int, float],
+                 special_status: SSFlags, high_limit: Optional[Union[int, float]],
+                 low_limit: Optional[Union[int, float]]):
         ChangeDeviceCommand.__init__(
             self, device_category, index, group_number, unit_number,
             enable_status, switches)
+        self._current_status = current_status
+        self._down_count = down_count
+        self._message_attribute = message_attribute
+        self._current_reading = current_reading
         self._special_status = special_status
-        self._alarm_high_limit = alarm_high_limit
-        self._alarm_low_limit = alarm_low_limit
-        self._control_high_limit = control_high_limit
-        self._control_low_limit = control_low_limit
+        self._high_limit = high_limit
+        self._low_limit = low_limit
 
     @property
     def action(self) -> str:
@@ -297,29 +310,46 @@ class ChangeSpecialDeviceCommand(ChangeDeviceCommand):
     @property
     def args(self) -> str:
         """Provides arguments for the command."""
-        return '{:02x}{:02x}{:02x}{:04x}{:04x}'.format(
-            self._index, self._group_number, self._unit_number,
-            int(self._enable_status), int(self._switches))
+        return '{}{}{}{}{}{}{}{}{}{}{}'.format(
+            to_ascii_hex(self._index, 2),
+            to_ascii_hex(self._group_number, 2),
+            to_ascii_hex(self._unit_number, 2),
+            to_ascii_hex(int(self._enable_status), 4),
+            to_ascii_hex(int(self._switches), 4),
+            to_ascii_hex(self._current_status, 2),
+            to_ascii_hex(self._down_count, 2),
+            to_ascii_hex(encode_value_using_ma(self._message_attribute, self._current_reading), 2),
+            to_ascii_hex(encode_value_using_ma(self._message_attribute, self._high_limit), 2),
+            to_ascii_hex(encode_value_using_ma(self._message_attribute, self._low_limit), 2),
+            to_ascii_hex(int(self._special_status), 2))
 
     @property
-    def alarm_high_limit(self) -> Optional[int]:
-        """Alarm high limit setting for a special sensor."""
-        return self._alarm_high_limit
+    def current_status(self) -> int:
+        """Multi-purpose field containing RSSI reading and magnet sensor flag.
+           Recommend using the 'rssi_db', 'rssi_bars' or 'is_closed' properties
+           instead. """
+        return self._current_status
 
     @property
-    def alarm_low_limit(self) -> Optional[int]:
-        """Alarm low limit setting for a special sensor."""
-        return self._alarm_low_limit
+    def down_count(self) -> int:
+        """Supervisory down count timer.
+           When this reaches zero, a 'Loss of Supervision-RF' event is raised."""
+        return self._down_count
 
     @property
-    def control_high_limit(self) -> Optional[int]:
-        """Control high limit setting for a special sensor."""
-        return self._control_high_limit
+    def high_limit(self) -> Optional[Union[int, float]]:
+        """High limit setting for a special sensor."""
+        return self._high_limit
 
     @property
-    def control_low_limit(self) -> Optional[int]:
-        """Control low limit setting for a special sensor."""
-        return self._control_low_limit
+    def low_limit(self) -> Optional[Union[int, float]]:
+        """Low limit setting for a special sensor."""
+        return self._low_limit
+
+    @property
+    def message_attribute(self) -> int:
+        """Message Attribute."""
+        return self._message_attribute
 
     @property
     def name(self) -> str:
@@ -327,9 +357,52 @@ class ChangeSpecialDeviceCommand(ChangeDeviceCommand):
         return CMD_DEVICE_PREFIX + self._device_category.id
 
     @property
-    def special_status(self) -> Optional[SSFlags]:
+    def special_status(self) -> SSFlags:
         """Special sensor status flags."""
         return self._special_status
+
+
+class ChangeSpecial2DeviceCommand(ChangeSpecialDeviceCommand):
+    """
+    Change settings for a 'Special' device on the base unit.
+
+    This version is for the LS-10/LS-20, which support separate control
+    limit fields.
+    """
+
+    def __init__(self, device_category: DeviceCategory, index: int,
+                 group_number: int, unit_number: int, enable_status: ESFlags,
+                 switches: SwitchFlags, current_status: int, down_count: int,
+                 message_attribute: int, current_reading: Union[int, float],
+                 special_status: SSFlags, high_limit: Optional[Union[int, float]],
+                 low_limit: Optional[Union[int, float]],
+                 control_high_limit: Optional[Union[int, float]],
+                 control_low_limit: Optional[Union[int, float]]):
+        ChangeSpecialDeviceCommand.__init__(
+            self, device_category, index, group_number, unit_number,
+            enable_status, switches, current_status, down_count,
+            message_attribute, current_reading, special_status,
+            high_limit, low_limit)
+        self._control_high_limit = control_high_limit
+        self._control_low_limit = control_low_limit
+
+    @property
+    def control_high_limit(self) -> Optional[Union[int, float]]:
+        """Control high limit setting for a special sensor."""
+        return self._control_high_limit
+
+    @property
+    def args(self) -> str:
+        """Provides arguments for the command."""
+        return '{}{}{}'.format(
+            ChangeSpecialDeviceCommand.args,
+            to_ascii_hex(encode_value_using_ma(self._message_attribute, self._control_high_limit), 2),
+            to_ascii_hex(encode_value_using_ma(self._message_attribute, self._control_low_limit), 2))
+
+    @property
+    def control_low_limit(self) -> Optional[Union[int, float]]:
+        """Control low limit setting for a special sensor."""
+        return self._control_low_limit
 
 
 class AddDeviceCommand(Command):

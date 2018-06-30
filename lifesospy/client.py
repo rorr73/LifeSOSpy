@@ -25,7 +25,7 @@ class Client(asyncio.Protocol, AsyncHelper):
     ENSURE_ALIVE_SECS = 30
 
     # Default timeout to wait for a response when executing commands
-    EXECUTE_TIMEOUT_SECS = 10
+    EXECUTE_TIMEOUT_SECS = 8
 
     def __init__(self, host: str, port: int, event_loop: asyncio.AbstractEventLoop):
         AsyncHelper.__init__(self, event_loop)
@@ -323,10 +323,15 @@ class Client(asyncio.Protocol, AsyncHelper):
                     self._on_device_event(self, device_event)
 
             # Events from devices that haven't been enrolled, as well as a
-            # periodic base unit event that appears to provide id of last
-            # enrolled device to raise an event. Will just ignore these for
-            # now, since I can't think of any use for them.
+            # display event from the base unit providing details to be shown.
+            # Ignoring them as we have no interest in either.
             elif line.startswith('XINPIC='):
+                # try:
+                #     device_event = DeviceEvent(line)
+                # except Exception:
+                #     _LOGGER.error("Failed to parse device event", exc_info=True)
+                #     continue
+                # _LOGGER.debug(device_event)
                 continue
 
             # Ademco ® Contact ID protocol
@@ -340,6 +345,15 @@ class Client(asyncio.Protocol, AsyncHelper):
 
                 if self._on_contact_id:
                     self._on_contact_id(self, contact_id)
+
+            # New sensor log entry; superfluous given device events already
+            # provide us with this information, so just ignore them
+            elif line.startswith('[' + CMD_SENSOR_LOG) and line.endswith(']'):
+                continue
+
+            # Failure to trigger an X10 switch
+            elif line == 'X10 ERR':
+                continue
 
             # Any unrecognised messages; ignore them too...
             else:

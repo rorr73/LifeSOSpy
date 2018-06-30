@@ -30,8 +30,9 @@ class DeviceCategory(object):
         return self._max_devices
 
     def __repr__(self) -> str:
-        return "<DeviceCategory: Id '{}', Description '{}', Max Devices {}>".\
-            format(self._id,
+        return "<{}: id={}, description={}, max_devices={}>".\
+            format(self.__class__.__name__,
+                   self._id,
                    self._description,
                    self._max_devices)
 
