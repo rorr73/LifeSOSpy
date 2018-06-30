@@ -43,9 +43,9 @@ class BaseUnit(AsyncHelper):
     # Allow this many retries when getting initial state
     RETRY_MAX = 3
 
-    def __init__(self, host: str, port: int, event_loop: asyncio.AbstractEventLoop):
-        AsyncHelper.__init__(self, event_loop)
-        self._client = Client(host, port, event_loop)
+    def __init__(self, host: str, port: int):
+        AsyncHelper.__init__(self)
+        self._client = Client(host, port)
         self._shutdown = False
         self._reconnect_interval = BaseUnit.RECONNECT_INTERVAL
         self._on_device_added = None

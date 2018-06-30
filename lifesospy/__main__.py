@@ -17,6 +17,7 @@ def main(argv):
     Basic command line script for testing library.
     """
 
+    # Parse command line arguments
     parser = argparse.ArgumentParser(
         description="LifeSOSpy v{} - {}".format(
             PROJECT_VERSION, PROJECT_DESCRIPTION))
@@ -38,29 +39,28 @@ def main(argv):
         action='store_true')
     args = parser.parse_args()
 
+    # Configure logger
     logging.basicConfig(
         format="%(asctime)s %(levelname)-5s (%(threadName)s) [%(name)s] %(message)s",
         datefmt='%Y-%m-%d %H:%M:%S',
         level=logging.DEBUG if args.verbose else logging.INFO)
 
+    # Create base unit instance and start up interface
     print("LifeSOSpy v{} - {}\n".format(PROJECT_VERSION, PROJECT_DESCRIPTION))
-
     loop = asyncio.get_event_loop()
-    baseunit = BaseUnit(args.host, args.port, loop)
+    baseunit = BaseUnit(args.host, args.port)
     if len(args.password) > 0:
         baseunit.password = args.password
     baseunit.start()
-    loop.run_until_complete(_async_wait(baseunit, loop))
+
+    # Provide interactive prompt for running test commands on another thread
+    loop.run_until_complete(
+        loop.run_in_executor(
+            None, _handle_interactive_baseunit_tests, baseunit, loop))
+
+    # Shut down interface and event loop
     baseunit.stop()
     loop.close()
-
-
-async def _async_wait(baseunit: BaseUnit,
-                      loop: asyncio.AbstractEventLoop) -> None:
-    # Prompt for test commands / do blocking on a threadpool thread
-    await loop.run_in_executor(None,
-                               _handle_interactive_baseunit_tests,
-                               baseunit, loop)
 
 
 def _handle_interactive_baseunit_tests(
@@ -367,6 +367,7 @@ def _handle_interactive_baseunit_tests(
                     continue
             asyncio.run_coroutine_threadsafe(
                 async_get_sensor_log(baseunit, max_count), loop)
+
 
 def _parse_special_value(text: str) -> Optional[Union[int, float]]:
     if text == 'none':

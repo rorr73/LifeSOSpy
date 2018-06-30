@@ -27,8 +27,8 @@ class Client(asyncio.Protocol, AsyncHelper):
     # Default timeout to wait for a response when executing commands
     EXECUTE_TIMEOUT_SECS = 8
 
-    def __init__(self, host: str, port: int, event_loop: asyncio.AbstractEventLoop):
-        AsyncHelper.__init__(self, event_loop)
+    def __init__(self, host: str, port: int):
+        AsyncHelper.__init__(self)
         self._host = host
         self._port = port
         self._password = ''

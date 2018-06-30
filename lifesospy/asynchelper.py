@@ -9,8 +9,8 @@ _LOGGER = logging.getLogger(__name__)
 class AsyncHelper(object):
     """Helper to create, track and cancel tasks."""
 
-    def __init__(self, loop: asyncio.AbstractEventLoop):
-        self._loop = loop
+    def __init__(self):
+        self._loop = asyncio.get_event_loop()
         self._pending_tasks = []
 
     def create_task(self, target: Callable[..., Any], *args: Any)\
