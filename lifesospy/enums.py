@@ -1,11 +1,14 @@
-import sys
+"""
+This module contains all enumerations used by this library.
+"""
 
-from enum import Enum, IntEnum
+import sys
+from enum import IntEnum
+from typing import TypeVar
 if float('%s.%s' % sys.version_info[:2]) >= 3.6:
-    from enum import IntFlag
+    from enum import IntFlag # pylint: disable=ungrouped-imports
 else:
-    from aenum import IntFlag
-from typing import Optional, TypeVar
+    from aenum import IntFlag # pylint: disable=ungrouped-imports
 
 T = TypeVar('T')
 
@@ -117,6 +120,7 @@ class BaseUnitState(IntEnumEx):
 
     @classmethod
     def from_operation_mode(cls, operation_mode: OperationMode) -> 'BaseUnitState':
+        """Returns equivalent BaseUnitState for specified OperationMode."""
         return BaseUnitState(int(operation_mode))
 
 
@@ -535,4 +539,3 @@ class SwitchState(IntEnumEx):
     """State of a switch."""
     On = 0x4
     Off = 0xc
-

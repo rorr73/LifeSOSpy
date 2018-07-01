@@ -1,5 +1,9 @@
-from lifesospy.util import *
+"""
+This module contains the PropertyChangedInfo class.
+"""
+
 from typing import Any, Dict
+from lifesospy.util import obj_to_dict
 
 
 class PropertyChangedInfo(object):

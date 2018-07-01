@@ -1,10 +1,23 @@
+"""
+This module contains all of the responses that can be received from the base unit.
+"""
+
 from abc import ABC, abstractmethod
 from datetime import datetime, time
-from lifesospy.const import *
-from lifesospy.devicecategory import *
-from lifesospy.enums import *
-from lifesospy.util import *
-from typing import Optional, Union
+from typing import Optional, Union, Dict, Any
+from lifesospy.const import (
+    MARKER_START, MARKER_END, CMD_DATETIME, CMD_OPMODE, CMD_DEVBYIDX_PREFIX,
+    CMD_DEVICE_PREFIX, CMD_CLEAR_STATUS, CMD_ROMVER, CMD_EXIT_DELAY,
+    CMD_ENTRY_DELAY, CMD_EVENT_LOG, CMD_SENSOR_LOG, CMD_SWITCH_PREFIX,
+    ACTION_NONE, ACTION_SET, ACTION_ADD, ACTION_DEL, MA_NONE, RESPONSE_ERROR)
+from lifesospy.devicecategory import (
+    DeviceCategory, DC_ALL, DC_ALL_LOOKUP, DC_BASEUNIT, DC_SPECIAL)
+from lifesospy.enums import (
+    OperationMode, DeviceType, DCFlags, ESFlags, SSFlags, SwitchFlags,
+    SwitchNumber, SwitchState, ContactIDEventQualifier, ContactIDEventCode)
+from lifesospy.util import (
+    is_ascii_hex, obj_to_dict, from_ascii_hex, to_ascii_hex,
+    decode_value_using_ma)
 
 
 class Response(ABC):
@@ -33,7 +46,7 @@ class Response(ABC):
             text = text[1:len(text)-1].lower()
 
         # No-op; can just ignore these
-        if len(text) == 0:
+        if not text:
             return None
 
         if text.startswith(CMD_DATETIME):
@@ -45,19 +58,18 @@ class Response(ABC):
         elif text.startswith(CMD_DEVBYIDX_PREFIX):
             if RESPONSE_ERROR == text[2:] or text[2:4] == '00':
                 return DeviceNotFoundResponse(text)
-            else:
-                return DeviceInfoResponse(text)
+            return DeviceInfoResponse(text)
 
         elif text.startswith(CMD_DEVICE_PREFIX):
-            action = next((a for a in [ACTION_ADD, ACTION_DEL, ACTION_SET] if a == text[2:3]), ACTION_NONE)
+            action = next((a for a in [ACTION_ADD, ACTION_DEL, ACTION_SET]
+                           if a == text[2:3]), ACTION_NONE)
             args = text[2+len(action):]
             if RESPONSE_ERROR == args:
                 return DeviceNotFoundResponse(text)
             elif action == ACTION_ADD:
-                if len(args) == 0:
+                if not args:
                     return DeviceAddingResponse(text)
-                else:
-                    return DeviceAddedResponse(text)
+                return DeviceAddedResponse(text)
             elif action == ACTION_SET:
                 return DeviceChangedResponse(text)
             elif action == ACTION_DEL:
@@ -83,14 +95,12 @@ class Response(ABC):
         elif text.startswith(CMD_EVENT_LOG):
             if RESPONSE_ERROR == text[2:]:
                 return EventLogNotFoundResponse(text)
-            else:
-                return EventLogResponse(text)
+            return EventLogResponse(text)
 
         elif text.startswith(CMD_SENSOR_LOG):
             if RESPONSE_ERROR == text[2:]:
                 return SensorLogNotFoundResponse(text)
-            else:
-                return SensorLogResponse(text)
+            return SensorLogResponse(text)
 
         else:
             raise ValueError("Response not recognised: " + text)
@@ -324,8 +334,7 @@ class DeviceInfoResponse(Response):
         """For Magnet Sensor; True if Closed, False if Open."""
         if self._device_type is not None and self._device_type == DeviceType.DoorMagnet:
             return bool(self._current_status & 0x01)
-        else:
-            return None
+        return None
 
     @property
     def low_limit(self) -> Optional[Union[int, float]]:
@@ -349,8 +358,7 @@ class DeviceInfoResponse(Response):
             return 2
         elif rssi_db < 90:
             return 3
-        else:
-            return 4
+        return 4
 
     @property
     def rssi_db(self) -> int:
@@ -390,19 +398,16 @@ class DeviceInfoResponse(Response):
                     self._control_low_limit)
         else:
             special = ''
-        return "<{}: device_id={:06x}, device_type_value={:02x}, device_type={}, device_category.description={}, zone={}, rssi_db={}{}, device_characteristics={}, enable_status={}, switches={}{}{}>".\
-            format(self.__class__.__name__,
-                   self._device_id,
-                   self._device_type_value,
-                   str(self._device_type),
-                   self._device_category.description,
-                   self.zone,
+        return "<{}: device_id={:06x}, device_type_value={:02x}, device_type={}, " \
+               "device_category.description={}, zone={}, rssi_db={}{}, " \
+               "device_characteristics={}, enable_status={}, switches={}{}{}>".format(
+                   self.__class__.__name__, self._device_id, self._device_type_value,
+                   str(self._device_type), self._device_category.description, self.zone,
                    self.rssi_db,
-                   '' if self._device_type_value != DeviceType.DoorMagnet else ", is_closed={}".format(self.is_closed),
-                   str(self._device_characteristics),
-                   str(self._enable_status),
-                   str(self._switches),
-                   special,
+                   '' if self._device_type_value != DeviceType.DoorMagnet else
+                   ", is_closed={}".format(self.is_closed),
+                   str(self._device_characteristics), str(self._enable_status),
+                   str(self._switches), special,
                    '' if not self._is_error else ", is_error")
 
 
@@ -545,19 +550,22 @@ class DeviceSettingsResponse(Response):
 
     def __repr__(self) -> str:
         if self._special_fields_exist:
-            special = ", current_reading_encoded={}, special_status={}, high_limit_encoded={}, low_limit_encoded={}".format(
-                self._current_reading_encoded,
-                str(self._special_status),
-                self._high_limit_encoded,
-                self._low_limit_encoded)
+            special = \
+                ", current_reading_encoded={}, special_status={}, " \
+                "high_limit_encoded={}, low_limit_encoded={}".format(
+                    self._current_reading_encoded,
+                    str(self._special_status),
+                    self._high_limit_encoded,
+                    self._low_limit_encoded)
             if self._control_limit_fields_exist:
                 special += ", control_high_limit_encoded={}, control_low_limit_encoded={}".format(
                     self._control_high_limit_encoded,
                     self._control_low_limit_encoded)
         else:
             special = ''
-        return "<{}: device_category.description={}, zone={}, index={}, enable_status={}, switches={}{}>". \
-            format(self.__class__.__name__,
+        return "<{}: device_category.description={}, zone={}, index={}, " \
+               "enable_status={}, switches={}{}>".format(
+                   self.__class__.__name__,
                    self._device_category.description,
                    self.zone,
                    self._index,
@@ -919,8 +927,7 @@ class EventLogResponse(Response):
         """Zone the device is assigned to."""
         if self._device_category == DC_BASEUNIT:
             return None
-        else:
-            return '{:02x}-{:02x}'.format(self._group_number, self._unit_number)
+        return '{:02x}-{:02x}'.format(self._group_number, self._unit_number)
 
     def __repr__(self) -> str:
         zone_user = ''
@@ -928,8 +935,10 @@ class EventLogResponse(Response):
             zone_user = ", Zone '{}'".format(self.zone)
         elif self._user_id is not None:
             zone_user = ", User {:02x}".format(self._user_id)
-        return "<{}: event_qualifier_value={:01x}, event_qualifier={}, event_code_value={:03x}, event_code={}, device_category.description={}{}, logged_date={}, logged_time={}>". \
-            format(self.__class__.__name__,
+        return "<{}: event_qualifier_value={:01x}, event_qualifier={}, " \
+               "event_code_value={:03x}, event_code={}, device_category.description={}{}, " \
+               "logged_date={}, logged_time={}>".format(
+                   self.__class__.__name__,
                    self._event_qualifier_value,
                    str(self._event_qualifier),
                    self._event_code_value,

@@ -1,7 +1,11 @@
+"""
+This module provides the DeviceEvent class.
+"""
+
+from typing import Optional, Dict, Any, Union
 from lifesospy.enums import (
     DeviceType, DeviceEventCode as EventCode, DCFlags)
-from lifesospy.util import *
-from typing import Optional, Dict, Any
+from lifesospy.util import decode_value_using_ma, obj_to_dict
 
 
 class DeviceEvent(object):
@@ -92,8 +96,7 @@ class DeviceEvent(object):
             return 2
         elif rssi_db < 90:
             return 3
-        else:
-            return 4
+        return 4
 
     @property
     def rssi_db(self) -> int:
@@ -105,8 +108,10 @@ class DeviceEvent(object):
     #
 
     def __repr__(self) -> str:
-        return "<{}: device_id={:06x}, device_type_value={:02x}, device_type={}, event_code_value={:04x}, event_code={}, rssi_db={}, device_characteristics={}, current_reading={}>".\
-            format(self.__class__.__name__,
+        return "<{}: device_id={:06x}, device_type_value={:02x}, device_type={}, " \
+               "event_code_value={:04x}, event_code={}, rssi_db={}, " \
+               "device_characteristics={}, current_reading={}>".format(
+                   self.__class__.__name__,
                    self._device_id,
                    self._device_type_value,
                    str(self._device_type),

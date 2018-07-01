@@ -1,23 +1,29 @@
+"""
+This module provides the DeviceCategory class that contains all details for
+a device category, and declares fixed instances of each available device
+category supported by the base unit.
+"""
+
 from collections import OrderedDict
-from lifesospy.util import *
 from typing import Optional, Dict, Any
+from lifesospy.util import obj_to_dict
 
 
 class DeviceCategory(object):
     """Represents a category of devices."""
 
-    def __init__(self, id: str, description: str, max_devices: Optional[int]):
-        self._id = id
+    def __init__(self, code: str, description: str, max_devices: Optional[int]):
+        self._code = code
         self._description = description
         self._max_devices = max_devices
 
     @property
-    def id(self) -> str:
-        """Identifier for the category.
+    def code(self) -> str:
+        """Code that identifies this category.
 
         This is a single character that is used in device commands
         and is shown on the base unit when reporting events."""
-        return self._id
+        return self._code
 
     @property
     def description(self) -> str:
@@ -30,9 +36,9 @@ class DeviceCategory(object):
         return self._max_devices
 
     def __repr__(self) -> str:
-        return "<{}: id={}, description={}, max_devices={}>".\
+        return "<{}: code={}, description={}, max_devices={}>".\
             format(self.__class__.__name__,
-                   self._id,
+                   self._code,
                    self._description,
                    self._max_devices)
 
@@ -48,8 +54,12 @@ DC_FIRE = DeviceCategory('f', 'Fire', 64)
 DC_MEDICAL = DeviceCategory('m', 'Medical', 32)
 DC_SPECIAL = DeviceCategory('e', 'Special', 32)
 DC_BASEUNIT = DeviceCategory('z', 'Base Unit', None)
-DC_ALL = [
-    DC_CONTROLLER, DC_BURGLAR, DC_FIRE, DC_MEDICAL, DC_SPECIAL, DC_BASEUNIT]
+
+# List of all device categories
+# Note: Order is important, as the index is referenced by some responses.
+DC_ALL = [DC_CONTROLLER, DC_BURGLAR, DC_FIRE, DC_MEDICAL, DC_SPECIAL, DC_BASEUNIT]
+
+# Dictionary of all device categories, for lookup using the code
 DC_ALL_LOOKUP = OrderedDict()
 for dc in DC_ALL:
-    DC_ALL_LOOKUP[dc.id] = dc
+    DC_ALL_LOOKUP[dc.code] = dc

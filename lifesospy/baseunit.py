@@ -1,18 +1,35 @@
-import asyncio
-import logging
+"""
+This module contains the BaseUnit class.
+"""
 
+import logging
+from collections import OrderedDict
+from datetime import datetime
+from typing import Callable, Any, Dict, List, Optional, Union
 from lifesospy.asynchelper import AsyncHelper
 from lifesospy.client import Client
-from lifesospy.command import *
-from lifesospy.const import *
+from lifesospy.command import (
+    Command, GetDeviceCommand, GetDeviceByIndexCommand, GetROMVersionCommand,
+    GetExitDelayCommand, GetEntryDelayCommand, SetDateTimeCommand,
+    ClearStatusCommand, AddDeviceCommand, ChangeDeviceCommand,
+    ChangeSpecialDeviceCommand, ChangeSpecial2DeviceCommand,
+    DeleteDeviceCommand, GetEventLogCommand, GetSensorLogCommand,
+    GetOpModeCommand, SetOpModeCommand, GetSwitchCommand, SetSwitchCommand)
 from lifesospy.contactid import ContactID
-from lifesospy.device import *
-from lifesospy.devicecategory import *
+from lifesospy.device import Device, SpecialDevice, DeviceCollection
+from lifesospy.devicecategory import (
+    DeviceCategory, DC_CONTROLLER, DC_BURGLAR, DC_SPECIAL, DC_ALL)
 from lifesospy.deviceevent import DeviceEvent
-from lifesospy.enums import *
+from lifesospy.enums import (
+    OperationMode, BaseUnitState, ESFlags, SSFlags, SwitchFlags, SwitchNumber,
+    SwitchState, ContactIDEventCategory, ContactIDEventQualifier,
+    ContactIDEventCode, DeviceEventCode)
 from lifesospy.propertychangedinfo import PropertyChangedInfo
-from lifesospy.response import *
-from typing import Callable, Any, Dict, List
+from lifesospy.response import (
+    Response, OpModeResponse, ROMVersionResponse, ExitDelayResponse,
+    EntryDelayResponse, DateTimeResponse, DeviceInfoResponse,
+    DeviceSettingsResponse, DeviceNotFoundResponse, DeviceAddedResponse,
+    DeviceDeletedResponse, EventLogResponse, SensorLogResponse, SwitchResponse)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -221,12 +238,14 @@ class BaseUnit(AsyncHelper):
         self._on_properties_changed = func
 
     @property
-    def on_switch_state_changed(self) -> Callable[['BaseUnit', SwitchNumber, Optional[bool]], None]:
+    def on_switch_state_changed(self) \
+            -> Callable[['BaseUnit', SwitchNumber, Optional[bool]], None]:
         """If implemented, called when the state of a switch has changed."""
         return self._on_switch_state_changed
 
     @on_switch_state_changed.setter
-    def on_switch_state_changed(self, func: Callable[['BaseUnit', SwitchNumber, Optional[bool]], None]):
+    def on_switch_state_changed(
+            self, func: Callable[['BaseUnit', SwitchNumber, Optional[bool]], None]):
         """
         Define the switch state changed callback implementation.
 
@@ -322,7 +341,7 @@ class BaseUnit(AsyncHelper):
                     device.category, response.index, group_number, unit_number,
                     enable_status, switches))
             if isinstance(response, DeviceSettingsResponse):
-                device._handle_response(response)
+                device._handle_response(response) # pylint: disable=protected-access
         if isinstance(response, DeviceNotFoundResponse):
             raise ValueError("Device to be changed was not found")
 
@@ -374,7 +393,7 @@ class BaseUnit(AsyncHelper):
                     high_limit, low_limit)
             response = await self._client.async_execute(command)
             if isinstance(response, DeviceSettingsResponse):
-                device._handle_response(response)
+                device._handle_response(response) # pylint: disable=protected-access
         if isinstance(response, DeviceNotFoundResponse):
             raise ValueError("Device to be changed was not found")
 
@@ -394,11 +413,11 @@ class BaseUnit(AsyncHelper):
             response = await self._client.async_execute(
                 DeleteDeviceCommand(device.category, response.index))
             if isinstance(response, DeviceDeletedResponse):
-                self._devices._delete(device)
+                self._devices._delete(device) # pylint: disable=protected-access
                 if self._on_device_deleted:
                     try:
-                        self._on_device_deleted(self, device)
-                    except Exception:
+                        self._on_device_deleted(self, device)  # pylint: disable=protected-access
+                    except Exception: # pylint: disable=broad-except
                         _LOGGER.error(
                             "Unhandled exception in on_device_deleted callback",
                             exc_info=True)
@@ -417,8 +436,7 @@ class BaseUnit(AsyncHelper):
             GetEventLogCommand(index))
         if isinstance(response, EventLogResponse):
             return response
-        else:
-            return None
+        return None
 
     async def async_get_sensor_log(self, index: int) -> Optional[SensorLogResponse]:
         """
@@ -432,8 +450,7 @@ class BaseUnit(AsyncHelper):
             GetSensorLogCommand(index))
         if isinstance(response, SensorLogResponse):
             return response
-        else:
-            return None
+        return None
 
     async def async_set_datetime(self, value: datetime = None) -> None:
         """
@@ -446,7 +463,8 @@ class BaseUnit(AsyncHelper):
         await self._client.async_execute(
             SetDateTimeCommand(value))
 
-    async def async_set_operation_mode(self, operation_mode: OperationMode, password: str = '') -> None:
+    async def async_set_operation_mode(
+            self, operation_mode: OperationMode, password: str = '') -> None:
         """
         Set the operation mode on the base unit.
 
@@ -459,7 +477,8 @@ class BaseUnit(AsyncHelper):
             SetOpModeCommand(operation_mode),
             password=password)
 
-    async def async_set_switch_state(self, switch_number: SwitchNumber, state: bool) -> None:
+    async def async_set_switch_state(
+            self, switch_number: SwitchNumber, state: bool) -> None:
         """
         Turn a switch on or off.
 
@@ -487,7 +506,7 @@ class BaseUnit(AsyncHelper):
         _LOGGER.debug("Connecting")
         try:
             await self._client.async_open()
-        except Exception:
+        except Exception: # pylint: disable=broad-except
             _LOGGER.error("Failed to open client connection. Will retry in %s seconds",
                           self._reconnect_interval, exc_info=True)
             self._loop.call_later(self._reconnect_interval, self._reconnect)
@@ -521,13 +540,13 @@ class BaseUnit(AsyncHelper):
             GetEntryDelayCommand(), "Failed to get entry delay")
 
         # Iterate through all enrolled devices
-        for dc in DC_ALL:
-            if dc.max_devices:
-                for index in range(0, dc.max_devices):
+        for category in DC_ALL:
+            if category.max_devices:
+                for index in range(0, category.max_devices):
                     response = await self._async_execute_retry(
-                        GetDeviceByIndexCommand(dc, index),
+                        GetDeviceByIndexCommand(category, index),
                         "Failed to get {} device #{}".format(
-                            dc.description, index))
+                            category.description, index))
                     if response is None or \
                             isinstance(response, DeviceNotFoundResponse):
                         break
@@ -582,7 +601,7 @@ class BaseUnit(AsyncHelper):
         if self._on_event:
             try:
                 self._on_event(self, contact_id)
-            except Exception:
+            except Exception: # pylint: disable=broad-except
                 _LOGGER.error(
                     "Unhandled exception in on_event callback",
                     exc_info=True)
@@ -601,7 +620,7 @@ class BaseUnit(AsyncHelper):
             return
 
         # Provide device with event
-        device._handle_device_event(device_event)
+        device._handle_device_event(device_event) # pylint: disable=protected-access
 
         # When a remote controller signals operation mode change it normally
         # takes effect immediately, unless switching to Away mode and there is
@@ -662,9 +681,9 @@ class BaseUnit(AsyncHelper):
             # Log changes to remote date/time
             if response.was_set:
                 _LOGGER.info(
-                    "Remote date/time {} {}".format(
-                        'is' if not response.was_set else "was set to",
-                        response.remote_datetime.strftime('%a %d %b %Y %I:%M %p')))
+                    "Remote date/time %s %s",
+                    'is' if not response.was_set else "was set to",
+                    response.remote_datetime.strftime('%a %d %b %Y %I:%M %p'))
 
         elif isinstance(response, DeviceInfoResponse):
             # Add / Update a device
@@ -674,16 +693,16 @@ class BaseUnit(AsyncHelper):
                     device = SpecialDevice(response)
                 else:
                     device = Device(response)
-                self._devices._add(device)
+                self._devices._add(device) # pylint: disable=protected-access
                 if self._on_device_added:
                     try:
                         self._on_device_added(self, device)
-                    except Exception:
+                    except Exception: # pylint: disable=broad-except
                         _LOGGER.error(
                             "Unhandled exception in on_device_added callback",
                             exc_info=True)
             else:
-                device._handle_response(response)
+                device._handle_response(response) # pylint: disable=protected-access
 
         elif isinstance(response, DeviceAddedResponse):
             # New device enrolled; the info is insufficient so we'll need
@@ -724,14 +743,14 @@ class BaseUnit(AsyncHelper):
         if self._on_switch_state_changed:
             try:
                 self._on_switch_state_changed(self, switch_number, new_state)
-            except Exception:
+            except Exception: # pylint: disable=broad-except
                 _LOGGER.error(
                     "Unhandled exception in on_switch_state_changed callback",
                     exc_info=True)
 
     async def _async_execute_retry(self, command: Command, error_message: str,
-                                   max_retries: int = RETRY_MAX
-                                   ) -> Optional[Response]:
+                                   max_retries: int = RETRY_MAX) \
+            -> Optional[Response]:
         # Execute a command and return response if successful; but retry if an
         # error occurs, up to the specified number of attempts. This can be
         # useful given the LS-30 comes with a dodgy unshielded serial cable.
@@ -740,7 +759,10 @@ class BaseUnit(AsyncHelper):
                 return None
             try:
                 return await self._client.async_execute(command)
-            except Exception:
+            except ConnectionError:
+                # Client no longer connected; don't bother retrying
+                return None
+            except Exception: # pylint: disable=broad-except
                 _LOGGER.error("%s [Attempt %s/%s]",
                               error_message, attempt, max_retries,
                               exc_info=True)
@@ -750,7 +772,7 @@ class BaseUnit(AsyncHelper):
         # Get backing field value for specified property name
         return self.__dict__.get('_' + property_name)
 
-    def _set_field_values(self, name_values: Dict[str, Any], notify:bool = True) -> None:
+    def _set_field_values(self, name_values: Dict[str, Any], notify: bool = True) -> None:
         # Create dictionary to hold changed properties with old / new value
         changes: List[PropertyChangedInfo] = []
 
@@ -775,12 +797,12 @@ class BaseUnit(AsyncHelper):
             changes.append(info)
 
         # Notify via callback if needed
-        if len(changes)> 0 and \
+        if changes and \
                 self._notify_properties_changed and \
                 self._on_properties_changed:
             try:
                 self._on_properties_changed(self, changes)
-            except Exception:
+            except Exception: # pylint: disable=broad-except
                 _LOGGER.error(
                     "Unhandled exception in on_properties_changed callback",
                     exc_info=True)

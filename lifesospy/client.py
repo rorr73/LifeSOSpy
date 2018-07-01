@@ -1,14 +1,17 @@
+"""
+This module contains the Client class.
+"""
+
 import asyncio
 import logging
 import time
-
+from typing import Callable, Dict, Any
 from lifesospy.asynchelper import AsyncHelper
-from lifesospy.command import *
-from lifesospy.const import *
+from lifesospy.command import Command, NoOpCommand
+from lifesospy.const import MARKER_START, MARKER_END, CMD_SENSOR_LOG
 from lifesospy.contactid import ContactID
 from lifesospy.deviceevent import DeviceEvent
-from lifesospy.response import Response, DeviceInfoResponse
-from typing import Callable, Dict, Any
+from lifesospy.response import Response
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,6 +36,7 @@ class Client(asyncio.Protocol, AsyncHelper):
         self._port = port
         self._password = ''
         self._transport = None
+        self._is_connected = False
         self._recv_buffer = ""
         self._executing = dict()
         self._time_last_data = time.time()
@@ -51,6 +55,11 @@ class Client(asyncio.Protocol, AsyncHelper):
     def host(self) -> str:
         """Host name or IP address for the LifeSOS ethernet interface."""
         return self._host
+
+    @property
+    def is_connected(self) -> bool:
+        """True if client is connected to server; otherwise, False."""
+        return self._is_connected
 
     @property
     def password(self) -> str:
@@ -184,6 +193,7 @@ class Client(asyncio.Protocol, AsyncHelper):
 
         _LOGGER.debug("Disconnected")
         self._transport.close()
+        self._is_connected = False
 
     async def async_execute(self, command: Command, password: str = '',
                             timeout: int = EXECUTE_TIMEOUT_SECS) -> Response:
@@ -195,6 +205,8 @@ class Client(asyncio.Protocol, AsyncHelper):
                     global password that may have been assigned to the client property)
         timeout:    maximum number of seconds to wait for a response
         """
+        if not self._is_connected:
+            raise ConnectionError("Client is not connected to the server")
         state: Dict[str, Any] = {
             'command': command,
             'event': asyncio.Event(loop=self._loop)}
@@ -238,22 +250,24 @@ class Client(asyncio.Protocol, AsyncHelper):
     def connection_made(self, transport):
         _LOGGER.debug("Connected")
         self._transport = transport
+        self._is_connected = True
         self._recv_buffer = ""
         self._time_last_data = time.time()
 
         if self._on_connection_made:
             self._on_connection_made(self)
 
-    def connection_lost(self, ex):
-        if not ex:
+    def connection_lost(self, exc):
+        if not exc:
             return
 
         _LOGGER.debug("ConnectionLost")
         self.cancel_pending_tasks()
         self._transport.close()
+        self._is_connected = False
 
         if self._on_connection_lost:
-            self._on_connection_lost(self, ex)
+            self._on_connection_lost(self, exc)
 
     def data_received(self, data):
         if not data:
@@ -267,10 +281,10 @@ class Client(asyncio.Protocol, AsyncHelper):
 
         try:
             recv_chars = data.decode('ascii')
-        except UnicodeDecodeError as ex:
+        except UnicodeDecodeError:
             _LOGGER.error("DataReceived: Data has bytes that cannot be decoded to ASCII: %s", data)
             return
-        _LOGGER.debug("DataReceived: %s", recv_chars.replace('\n','\\n').replace('\r','\\r'))
+        _LOGGER.debug("DataReceived: %s", recv_chars.replace('\n', '\\n').replace('\r', '\\r'))
 
         # Data received will have CR/LF somewhat randomly at either the start or end
         # of each message. To deal with this, we'll append it to a running buffer and then
@@ -279,14 +293,14 @@ class Client(asyncio.Protocol, AsyncHelper):
         self._recv_buffer += recv_chars
         lines = self._recv_buffer.splitlines()
         last_line = lines[len(lines) - 1]
-        if len(last_line) > 0 and self._recv_buffer.endswith(last_line):
+        if last_line and self._recv_buffer.endswith(last_line):
             # Last line with no CR/LF; keep in buffer for next call
             self._recv_buffer = last_line
             lines.pop(len(lines) - 1)
         else:
             self._recv_buffer = ""
         for line in lines:
-            if len(line) == 0:
+            if not line:
                 continue
 
             # Handle responses; these are given in response to a command issued, either
@@ -294,7 +308,7 @@ class Client(asyncio.Protocol, AsyncHelper):
             if line.startswith(MARKER_START) and line.endswith(MARKER_END):
                 try:
                     response = Response.parse(line)
-                except Exception:
+                except Exception: # pylint: disable=broad-except
                     _LOGGER.error("Failed to parse response", exc_info=True)
                     continue
                 if response:
@@ -314,7 +328,7 @@ class Client(asyncio.Protocol, AsyncHelper):
             elif line.startswith('MINPIC='):
                 try:
                     device_event = DeviceEvent(line)
-                except Exception:
+                except Exception: # pylint: disable=broad-except
                     _LOGGER.error("Failed to parse device event", exc_info=True)
                     continue
                 _LOGGER.debug(device_event)
@@ -338,7 +352,7 @@ class Client(asyncio.Protocol, AsyncHelper):
             elif line.startswith('(') and line.endswith(')'):
                 try:
                     contact_id = ContactID(line[1:len(line)-1])
-                except Exception:
+                except Exception: # pylint: disable=broad-except
                     _LOGGER.error("Failed to parse ContactID", exc_info=True)
                     continue
                 _LOGGER.debug(contact_id)

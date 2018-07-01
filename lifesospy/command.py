@@ -1,10 +1,19 @@
+"""
+This module contains all of the commands that can be sent to the base unit.
+"""
+
 from abc import ABC, abstractmethod
 from datetime import datetime
-from lifesospy.const import *
-from lifesospy.devicecategory import *
-from lifesospy.enums import *
-from lifesospy.util import *
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
+from lifesospy.const import (
+    MARKER_START, MARKER_END, CMD_DATETIME, CMD_OPMODE, CMD_DEVBYIDX_PREFIX,
+    CMD_DEVICE_PREFIX, CMD_CLEAR_STATUS, CMD_ROMVER, CMD_EXIT_DELAY,
+    CMD_ENTRY_DELAY, CMD_EVENT_LOG, CMD_SENSOR_LOG, CMD_SWITCH_PREFIX,
+    ACTION_NONE, ACTION_GET, ACTION_SET, ACTION_ADD, ACTION_DEL)
+from lifesospy.devicecategory import DeviceCategory
+from lifesospy.enums import (
+    OperationMode, ESFlags, SSFlags, SwitchFlags, SwitchNumber, SwitchState)
+from lifesospy.util import encode_value_using_ma, obj_to_dict, to_ascii_hex
 
 
 class Command(ABC):
@@ -36,8 +45,9 @@ class Command(ABC):
             MARKER_END
 
     def __repr__(self) -> str:
-        return "<{}: {}>".format(self.__class__.__name__,
-                                   self.format())
+        return "<{}: {}>".format(
+            self.__class__.__name__,
+            self.format())
 
     def as_dict(self) -> Dict[str, Any]:
         """Converts to a dict of attributes for easier JSON serialisation."""
@@ -169,7 +179,7 @@ class GetDeviceByIndexCommand(Command):
     @property
     def name(self) -> str:
         """Provides the command name."""
-        return CMD_DEVBYIDX_PREFIX + self._device_category.id
+        return CMD_DEVBYIDX_PREFIX + self._device_category.code
 
 
 class GetDeviceCommand(Command):
@@ -205,7 +215,7 @@ class GetDeviceCommand(Command):
     @property
     def name(self) -> str:
         """Provides the command name."""
-        return CMD_DEVICE_PREFIX + self._device_category.id
+        return CMD_DEVICE_PREFIX + self._device_category.code
 
     @property
     def unit_number(self) -> int:
@@ -264,7 +274,7 @@ class ChangeDeviceCommand(Command):
     @property
     def name(self) -> str:
         """Provides the command name."""
-        return CMD_DEVICE_PREFIX + self._device_category.id
+        return CMD_DEVICE_PREFIX + self._device_category.code
 
     @property
     def switches(self) -> SwitchFlags:
@@ -354,7 +364,7 @@ class ChangeSpecialDeviceCommand(ChangeDeviceCommand):
     @property
     def name(self) -> str:
         """Provides the command name."""
-        return CMD_DEVICE_PREFIX + self._device_category.id
+        return CMD_DEVICE_PREFIX + self._device_category.code
 
     @property
     def special_status(self) -> SSFlags:
@@ -396,8 +406,10 @@ class ChangeSpecial2DeviceCommand(ChangeSpecialDeviceCommand):
         """Provides arguments for the command."""
         return '{}{}{}'.format(
             ChangeSpecialDeviceCommand.args,
-            to_ascii_hex(encode_value_using_ma(self._message_attribute, self._control_high_limit), 2),
-            to_ascii_hex(encode_value_using_ma(self._message_attribute, self._control_low_limit), 2))
+            to_ascii_hex(encode_value_using_ma(self._message_attribute,
+                                               self._control_high_limit), 2),
+            to_ascii_hex(encode_value_using_ma(self._message_attribute,
+                                               self._control_low_limit), 2))
 
     @property
     def control_low_limit(self) -> Optional[Union[int, float]]:
@@ -424,7 +436,7 @@ class AddDeviceCommand(Command):
     @property
     def name(self) -> str:
         """Provides the command name."""
-        return CMD_DEVICE_PREFIX + self._device_category.id
+        return CMD_DEVICE_PREFIX + self._device_category.code
 
 
 class DeleteDeviceCommand(Command):
@@ -457,7 +469,7 @@ class DeleteDeviceCommand(Command):
     @property
     def name(self) -> str:
         """Provides the command name."""
-        return CMD_DEVICE_PREFIX + self._device_category.id
+        return CMD_DEVICE_PREFIX + self._device_category.code
 
 
 class ClearStatusCommand(Command):
@@ -504,7 +516,8 @@ class SetExitDelayCommand(Command):
         if exit_delay < 0x00:
             raise ValueError("Exit delay cannot be negative.")
         elif exit_delay > 0xff:
-            raise ValueError("Exit delay cannot exceed %s seconds.", 0xff)
+            raise ValueError(
+                "Exit delay cannot exceed {} seconds.".format(0xff))
         self._exit_delay = exit_delay
 
     @property
@@ -549,7 +562,7 @@ class SetEntryDelayCommand(Command):
         if entry_delay < 0x00:
             raise ValueError("Entry delay cannot be negative.")
         elif entry_delay > 0xff:
-            raise ValueError("Entry delay cannot exceed %s seconds.", 0xff)
+            raise ValueError("Entry delay cannot exceed {} seconds.".format(0xff))
         self._entry_delay = entry_delay
 
     @property

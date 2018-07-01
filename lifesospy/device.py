@@ -1,14 +1,18 @@
-import logging
+"""
+This module contains the Device class.
+"""
 
+import logging
 from collections.abc import Sized, Iterable, Container
-from lifesospy.devicecategory import *
+from typing import (
+    Callable, Dict, List, Any, Optional, Union, Iterator)
+from lifesospy.devicecategory import DeviceCategory
 from lifesospy.deviceevent import DeviceEvent
 from lifesospy.enums import (
     DeviceType, DCFlags, ESFlags, SSFlags, DeviceEventCode, SwitchFlags)
 from lifesospy.propertychangedinfo import PropertyChangedInfo
 from lifesospy.response import DeviceInfoResponse, DeviceSettingsResponse
-from typing import (
-    Callable, Dict, List, Any, Optional, Union, Iterator, overload)
+from lifesospy.util import decode_value_using_ma
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,9 +25,9 @@ class Device(object):
     # Property names
     PROP_CATEGORY = 'category'
     PROP_CHARACTERISTICS = 'characteristics'
+    PROP_DEVICE_ID = 'device_id'
     PROP_ENABLE_STATUS = 'enable_status'
     PROP_GROUP_NUMBER = 'group_number'
-    PROP_ID = 'id'
     PROP_IS_CLOSED = 'is_closed'
     PROP_MESSAGE_ATTRIBUTE = 'message_attribute'
     PROP_RSSI_BARS = 'rssi_bars'
@@ -41,7 +45,7 @@ class Device(object):
         # Init fixed and variable property values
         self._notify_properties_changed = False
         self._set_field_values({
-            Device.PROP_ID: response.device_id,
+            Device.PROP_DEVICE_ID: response.device_id,
             Device.PROP_CATEGORY: response.device_category,
             Device.PROP_MESSAGE_ATTRIBUTE: response.message_attribute,
             Device.PROP_TYPE_VALUE: response.device_type_value,
@@ -66,6 +70,11 @@ class Device(object):
         return self._get_field_value(Device.PROP_CHARACTERISTICS)
 
     @property
+    def device_id(self) -> int:
+        """Unique identifier for the device."""
+        return self._get_field_value(Device.PROP_DEVICE_ID)
+
+    @property
     def enable_status(self) -> ESFlags:
         """Flags indicating settings that have been enabled."""
         return self._get_field_value(Device.PROP_ENABLE_STATUS)
@@ -74,11 +83,6 @@ class Device(object):
     def group_number(self) -> int:
         """Group number the device is assigned to."""
         return self._get_field_value(Device.PROP_GROUP_NUMBER)
-
-    @property
-    def id(self) -> int:
-        """Unique identifier for the device."""
-        return self._get_field_value(Device.PROP_ID)
 
     @property
     def is_closed(self) -> Optional[bool]:
@@ -171,15 +175,18 @@ class Device(object):
 
     def __repr__(self) -> str:
         """Provides an info string for the device."""
-        return "<{}: id={:06x}, type_value={:02x}, type={}, category.description={}, zone={}, rssi_db={}{}, characteristics={}, enable_status={}, switches={}>".\
-            format(self.__class__.__name__,
-                   self.id,
+        return "<{}: device_id={:06x}, type_value={:02x}, type={}, " \
+               "category.description={}, zone={}, rssi_db={}{}, characteristics={}, " \
+               "enable_status={}, switches={}>".format(
+                   self.__class__.__name__,
+                   self.device_id,
                    self.type_value,
                    str(self.type),
                    self.category.description,
                    self.zone,
                    self.rssi_db,
-                   '' if self.type_value != DeviceType.DoorMagnet else ", is_closed={}".format(self.is_closed),
+                   '' if self.type_value != DeviceType.DoorMagnet else
+                   ", is_closed={}".format(self.is_closed),
                    str(self.characteristics),
                    str(self.enable_status),
                    str(self.switches))
@@ -211,12 +218,12 @@ class Device(object):
         if self._on_event and device_event.event_code is not None:
             try:
                 self._on_event(self, device_event.event_code)
-            except Exception:
+            except Exception: # pylint: disable=broad-except
                 _LOGGER.error(
                     "Unhandled exception in on_event callback",
                     exc_info=True)
 
-    def _get_device_event_changes(self, device_event: DeviceEvent) -> Dict[str, Any]:
+    def _get_device_event_changes(self, device_event: DeviceEvent) -> Dict[str, Any]: # pylint: disable=no-self-use
         # Override this to provide any additional property changes
         return {}
 
@@ -247,7 +254,9 @@ class Device(object):
         changes.update(self._get_response_changes(response))
         self._set_field_values(changes)
 
-    def _get_response_changes(self, response: Union[DeviceInfoResponse, DeviceSettingsResponse]) -> Dict[str, Any]:
+    def _get_response_changes( # pylint: disable=no-self-use
+            self, response: Union[DeviceInfoResponse, DeviceSettingsResponse]) \
+            -> Dict[str, Any]:
         # Override this to provide any additional property changes
         return {}
 
@@ -255,7 +264,7 @@ class Device(object):
         # Get backing field value for specified property name
         return self.__dict__.get('_' + property_name)
 
-    def _set_field_values(self, name_values: Dict[str, Any], notify:bool = True) -> None:
+    def _set_field_values(self, name_values: Dict[str, Any], notify: bool = True) -> None:
         # Create dictionary to hold changed properties with old / new value
         changes: List[PropertyChangedInfo] = []
 
@@ -280,12 +289,12 @@ class Device(object):
             changes.append(info)
 
         # Notify via callback if needed
-        if len(changes)> 0 and \
+        if changes and \
                 self._notify_properties_changed and \
                 self._on_properties_changed:
             try:
                 self._on_properties_changed(self, changes)
-            except Exception:
+            except Exception: # pylint: disable=broad-except
                 _LOGGER.error(
                     "Unhandled exception in on_properties_changed callback",
                     exc_info=True)
@@ -410,7 +419,9 @@ class SpecialDevice(Device):
             SpecialDevice.PROP_CURRENT_READING: device_event.current_reading,
         }
 
-    def _get_response_changes(self, response: Union[DeviceInfoResponse, DeviceSettingsResponse]) -> Dict[str, Any]:
+    def _get_response_changes(
+            self, response: Union[DeviceInfoResponse, DeviceSettingsResponse]) \
+            -> Dict[str, Any]:
         changes = {}
         if isinstance(response, DeviceInfoResponse):
             changes.update({
@@ -459,13 +470,12 @@ class DeviceCollection(Sized, Iterable, Container):
         if isinstance(device, int):
             return self._devices.keys().__contains__(device)
         elif isinstance(device, Device):
-            return self._devices.keys().__contains__(device.id)
-        else:
-            return False
+            return self._devices.keys().__contains__(device.device_id)
+        return False
 
-    def __getitem__(self, id: int) -> Device:
+    def __getitem__(self, device_id: int) -> Device:
         """Get device using the specified ID."""
-        return self._devices[id]
+        return self._devices[device_id]
 
     def __iter__(self) -> Iterator[Device]:
         """Iterator for the devices in collection."""
@@ -487,9 +497,9 @@ class DeviceCollection(Sized, Iterable, Container):
             ", ".join([str(cc[1]) + " " + cc[0].description
                        for cc in category_count.items()]))
 
-    def get(self, id: int) -> Optional[Device]:
+    def get(self, device_id: int) -> Optional[Device]:
         """Get device using the specified ID, or None if not found."""
-        return self._devices.get(id)
+        return self._devices.get(device_id)
 
     #
     # METHODS - Private / Internal
@@ -497,8 +507,8 @@ class DeviceCollection(Sized, Iterable, Container):
 
     def _add(self, device: Device) -> None:
         # Add new device to the collection
-        self._devices[device.id] = device
+        self._devices[device.device_id] = device
 
     def _delete(self, device: Device) -> None:
         # Delete specified device from collection
-        self._devices.pop(device.id)
+        self._devices.pop(device.device_id)

@@ -1,13 +1,21 @@
+"""
+This module allows the library to be run as an interactive command line
+application, primarily to assist with testing the library.
+"""
+
 import argparse
 import asyncio
 import logging
 import sys
 import traceback
 
+from typing import Optional, Union
 from lifesospy.baseunit import BaseUnit
-from lifesospy.const import *
-from lifesospy.devicecategory import *
-from lifesospy.enums import *
+from lifesospy.const import (
+    PROJECT_VERSION, PROJECT_DESCRIPTION)
+from lifesospy.devicecategory import DeviceCategory, DC_ALL_LOOKUP
+from lifesospy.enums import (
+    OperationMode, ESFlags, SSFlags, SwitchFlags, SwitchNumber)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,7 +57,7 @@ def main(argv):
     print("LifeSOSpy v{} - {}\n".format(PROJECT_VERSION, PROJECT_DESCRIPTION))
     loop = asyncio.get_event_loop()
     baseunit = BaseUnit(args.host, args.port)
-    if len(args.password) > 0:
+    if args.password:
         baseunit.password = args.password
     baseunit.start()
 
@@ -65,7 +73,10 @@ def main(argv):
 
 def _handle_interactive_baseunit_tests(
         baseunit: BaseUnit, loop: asyncio.AbstractEventLoop) -> None:
-    help = (
+    # pylint: disable=broad-except
+    # pylint: disable=missing-docstring
+
+    help_message = (
         "Test commands available:\n"
         "'exit' - exit this application\n"
         "'help' - display this list of available commands\n"
@@ -87,7 +98,8 @@ def _handle_interactive_baseunit_tests(
         "'delete ID' - delete device, where ID is 6 char hex device id\n"
         "'eventlog (#)' - get event log, optionally get only # most recent\n"
         "'sensorlog (#)' - get sensor log, optionally get only # most recent")
-    print(help)
+    print(help_message)
+
     while True:
         line = sys.stdin.readline().strip().lower()
 
@@ -97,7 +109,7 @@ def _handle_interactive_baseunit_tests(
 
         # Display list of available commands and the arguments required
         elif line == 'help':
-            print(help)
+            print(help_message)
 
         # Print all enrolled devices
         elif line == 'devices':
@@ -109,7 +121,7 @@ def _handle_interactive_baseunit_tests(
             async def async_set_operation_mode(operation_mode: OperationMode):
                 try:
                     await baseunit.async_set_operation_mode(operation_mode)
-                    print("Operation mode was set to {}.".format(operation_mode))
+                    print("Operation mode was set to {}.".format(str(operation_mode)))
                 except Exception:
                     traceback.print_exc()
 

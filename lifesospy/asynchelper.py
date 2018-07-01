@@ -1,3 +1,7 @@
+"""
+This module contains the AsyncHelper class.
+"""
+
 import asyncio
 import logging
 
@@ -15,7 +19,7 @@ class AsyncHelper(object):
 
     def create_task(self, target: Callable[..., Any], *args: Any)\
             -> asyncio.tasks.Task:
-        # Create task and add to our collection of pending tasks
+        """Create task and add to our collection of pending tasks."""
         if asyncio.iscoroutine(target):
             task = self._loop.create_task(target)
         elif asyncio.iscoroutinefunction(target):
@@ -26,6 +30,7 @@ class AsyncHelper(object):
         return task
 
     def cancel_pending_tasks(self):
+        """Cancel all pending tasks."""
         for task in self._pending_tasks:
             task.cancel()
             if not self._loop.is_running():
@@ -33,6 +38,6 @@ class AsyncHelper(object):
                     self._loop.run_until_complete(task)
                 except asyncio.CancelledError:
                     pass
-                except Exception:
+                except Exception: # pylint: disable=broad-except
                     _LOGGER.error("Unhandled exception from async task",
                                   exc_info=True)
