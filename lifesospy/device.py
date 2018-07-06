@@ -206,7 +206,7 @@ class Device(object):
                 is_closed = True
 
         # Update properties
-        changes: Dict[str, Any] = {
+        changes = {
             Device.PROP_IS_CLOSED: is_closed,
             Device.PROP_RSSI_BARS: device_event.rssi_bars,
             Device.PROP_RSSI_DB: device_event.rssi_db,
@@ -266,7 +266,7 @@ class Device(object):
 
     def _set_field_values(self, name_values: Dict[str, Any], notify: bool = True) -> None:
         # Create dictionary to hold changed properties with old / new value
-        changes: List[PropertyChangedInfo] = []
+        changes = []
 
         # Process each property to set from caller
         for property_name, new_value in name_values.items():
@@ -459,7 +459,7 @@ class DeviceCollection(Sized, Iterable, Container):
     """Collection of devices."""
 
     def __init__(self):
-        self._devices: Dict[int, Device] = {}
+        self._devices = {}
 
     #
     # METHODS - Public
@@ -487,7 +487,7 @@ class DeviceCollection(Sized, Iterable, Container):
 
     def __repr__(self) -> str:
         """Provides an info string for the device collection."""
-        category_count: Dict[DeviceCategory, int] = {}
+        category_count = {}
         for device in self._devices.values():
             category_count[device.category] = \
                 category_count.get(device.category, 0) + 1

@@ -82,7 +82,7 @@ class BaseUnit(AsyncHelper):
         self._devices = DeviceCollection()
 
         # Create dictionary to hold state for each switch
-        self._switch_state: Dict[SwitchNumber, Optional[bool]] = OrderedDict()
+        self._switch_state = OrderedDict()
         for switch_number in SwitchNumber:
             self._switch_state[switch_number] = None
 
@@ -774,7 +774,7 @@ class BaseUnit(AsyncHelper):
 
     def _set_field_values(self, name_values: Dict[str, Any], notify: bool = True) -> None:
         # Create dictionary to hold changed properties with old / new value
-        changes: List[PropertyChangedInfo] = []
+        changes = []
 
         # Process each property to set from caller
         for property_name, new_value in name_values.items():

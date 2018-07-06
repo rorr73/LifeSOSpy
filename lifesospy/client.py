@@ -207,7 +207,7 @@ class Client(asyncio.Protocol, AsyncHelper):
         """
         if not self._is_connected:
             raise ConnectionError("Client is not connected to the server")
-        state: Dict[str, Any] = {
+        state = {
             'command': command,
             'event': asyncio.Event(loop=self._loop)}
         self._executing[command.name] = state
