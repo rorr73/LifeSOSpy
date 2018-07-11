@@ -6,7 +6,7 @@ category supported by the base unit.
 
 from collections import OrderedDict
 from typing import Optional, Dict, Any
-from lifesospy.util import obj_to_dict
+from lifesospy.util import serializable
 
 
 class DeviceCategory(object):
@@ -43,8 +43,8 @@ class DeviceCategory(object):
                    self._max_devices)
 
     def as_dict(self) -> Dict[str, Any]:
-        """Converts to a dict of attributes for easier JSON serialisation."""
-        return obj_to_dict(self)
+        """Converts to a dict of attributes for easier serialization."""
+        return serializable(self)
 
 
 # Device categories

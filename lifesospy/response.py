@@ -16,7 +16,7 @@ from lifesospy.enums import (
     OperationMode, DeviceType, DCFlags, ESFlags, SSFlags, SwitchFlags,
     SwitchNumber, SwitchState, ContactIDEventQualifier, ContactIDEventCode)
 from lifesospy.util import (
-    is_ascii_hex, obj_to_dict, from_ascii_hex, to_ascii_hex,
+    is_ascii_hex, serializable, from_ascii_hex, to_ascii_hex,
     decode_value_using_ma)
 
 
@@ -111,8 +111,8 @@ class Response(ABC):
             '' if not self._is_error else ": is_error")
 
     def as_dict(self) -> Dict[str, Any]:
-        """Converts to a dict of attributes for easier JSON serialisation."""
-        return obj_to_dict(self)
+        """Converts to a dict of attributes for easier serialization."""
+        return serializable(self)
 
 
 class DateTimeResponse(Response):

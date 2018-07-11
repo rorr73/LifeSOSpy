@@ -8,7 +8,7 @@ from lifesospy.enums import (
     ContactIDEventQualifier as EventQualifier,
     ContactIDEventCategory as EventCategory,
     ContactIDEventCode as EventCode)
-from lifesospy.util import obj_to_dict
+from lifesospy.util import serializable
 
 
 class ContactID(object):
@@ -149,5 +149,5 @@ class ContactID(object):
                    zone_user)
 
     def as_dict(self) -> Dict[str, Any]:
-        """Converts to a dict of attributes for easier JSON serialisation."""
-        return obj_to_dict(self)
+        """Converts to a dict of attributes for easier serialization."""
+        return serializable(self)

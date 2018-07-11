@@ -30,6 +30,7 @@ from lifesospy.response import (
     EntryDelayResponse, DateTimeResponse, DeviceInfoResponse,
     DeviceSettingsResponse, DeviceNotFoundResponse, DeviceAddedResponse,
     DeviceDeletedResponse, EventLogResponse, SensorLogResponse, SwitchResponse)
+from lifesospy.util import serializable
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -498,6 +499,17 @@ class BaseUnit(AsyncHelper):
                    self.is_connected,
                    str(self.state))
 
+    def as_dict(self) -> Dict[str, Any]:
+        """Converts to a dict of attributes for easier serialization."""
+        def _on_filter(obj: Any, name: str) -> bool:
+            # Filter out any callbacks
+            if isinstance(obj, BaseUnit):
+                if name.startswith('on_'):
+                    return False
+            return True
+
+        return serializable(self, on_filter=_on_filter)
+
     #
     # METHODS - Private / Internal
     #
@@ -774,7 +786,7 @@ class BaseUnit(AsyncHelper):
 
     def _set_field_values(self, name_values: Dict[str, Any], notify: bool = True) -> None:
         # Create dictionary to hold changed properties with old / new value
-        changes = []
+        changes = [] # type: List[PropertyChangedInfo]
 
         # Process each property to set from caller
         for property_name, new_value in name_values.items():

@@ -13,7 +13,7 @@ from lifesospy.const import (
 from lifesospy.devicecategory import DeviceCategory
 from lifesospy.enums import (
     OperationMode, ESFlags, SSFlags, SwitchFlags, SwitchNumber, SwitchState)
-from lifesospy.util import encode_value_using_ma, obj_to_dict, to_ascii_hex
+from lifesospy.util import encode_value_using_ma, serializable, to_ascii_hex
 
 
 class Command(ABC):
@@ -50,8 +50,8 @@ class Command(ABC):
             self.format())
 
     def as_dict(self) -> Dict[str, Any]:
-        """Converts to a dict of attributes for easier JSON serialisation."""
-        return obj_to_dict(self)
+        """Converts to a dict of attributes for easier serialization."""
+        return serializable(self)
 
 
 class NoOpCommand(Command):

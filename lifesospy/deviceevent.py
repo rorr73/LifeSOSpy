@@ -5,7 +5,7 @@ This module provides the DeviceEvent class.
 from typing import Optional, Dict, Any, Union
 from lifesospy.enums import (
     DeviceType, DeviceEventCode as EventCode, DCFlags)
-from lifesospy.util import decode_value_using_ma, obj_to_dict
+from lifesospy.util import decode_value_using_ma, serializable
 
 
 class DeviceEvent(object):
@@ -122,5 +122,5 @@ class DeviceEvent(object):
                    self._current_reading)
 
     def as_dict(self) -> Dict[str, Any]:
-        """Converts to a dict of attributes for easier JSON serialisation."""
-        return obj_to_dict(self)
+        """Converts to a dict of attributes for easier serialization."""
+        return serializable(self)

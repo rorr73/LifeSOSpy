@@ -12,7 +12,7 @@ from lifesospy.enums import (
     DeviceType, DCFlags, ESFlags, SSFlags, DeviceEventCode, SwitchFlags)
 from lifesospy.propertychangedinfo import PropertyChangedInfo
 from lifesospy.response import DeviceInfoResponse, DeviceSettingsResponse
-from lifesospy.util import decode_value_using_ma
+from lifesospy.util import decode_value_using_ma, serializable
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -190,6 +190,17 @@ class Device(object):
                    str(self.characteristics),
                    str(self.enable_status),
                    str(self.switches))
+
+    def as_dict(self) -> Dict[str, Any]:
+        """Converts to a dict of attributes for easier serialization."""
+        def _on_filter(obj: Any, name: str) -> bool:
+            # Filter out any callbacks
+            if isinstance(obj, Device):
+                if name.startswith('on_'):
+                    return False
+            return True
+
+        return serializable(self, on_filter=_on_filter)
 
     #
     # METHODS - Private / Internal

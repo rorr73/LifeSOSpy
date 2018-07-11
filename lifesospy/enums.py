@@ -6,7 +6,7 @@ import sys
 from enum import IntEnum
 from typing import TypeVar
 if float('%s.%s' % sys.version_info[:2]) >= 3.6:
-    from enum import IntFlag # pylint: disable=ungrouped-imports
+    from enum import IntFlag # pylint: disable=ungrouped-imports,no-name-in-module
 else:
     from aenum import IntFlag # pylint: disable=ungrouped-imports
 

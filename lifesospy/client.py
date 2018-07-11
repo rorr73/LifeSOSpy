@@ -5,7 +5,7 @@ This module contains the Client class.
 import asyncio
 import logging
 import time
-from typing import Callable, Dict, Any
+from typing import (Callable, Dict, Any) # pylint: disable=unused-import
 from lifesospy.asynchelper import AsyncHelper
 from lifesospy.command import Command, NoOpCommand
 from lifesospy.const import MARKER_START, MARKER_END, CMD_SENSOR_LOG
@@ -209,7 +209,8 @@ class Client(asyncio.Protocol, AsyncHelper):
             raise ConnectionError("Client is not connected to the server")
         state = {
             'command': command,
-            'event': asyncio.Event(loop=self._loop)}
+            'event': asyncio.Event(loop=self._loop)
+        } # type: Dict[str, Any]
         self._executing[command.name] = state
         try:
             self._send(command, password)
