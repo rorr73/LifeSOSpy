@@ -161,7 +161,7 @@ class OpModeResponse(Response):
         if self._was_set:
             text = text[1:]
         self._operation_mode_value = from_ascii_hex(text)
-        self._operation_mode = OperationMode.parseint(
+        self._operation_mode = OperationMode.parse_value(
             self._operation_mode_value)
 
     @property
@@ -203,7 +203,7 @@ class DeviceInfoResponse(Response):
         else:
             self._index = None
         self._device_type_value = from_ascii_hex(text[0:2])
-        self._device_type = DeviceType.parseint(self._device_type_value)
+        self._device_type = DeviceType.parse_value(self._device_type_value)
         self._device_id = from_ascii_hex(text[2:8])
         self._message_attribute = from_ascii_hex(text[8:10])
         self._device_characteristics = DCFlags(from_ascii_hex(text[10:12]))
@@ -784,7 +784,7 @@ class SwitchResponse(Response):
         if self._was_set:
             text = text[1:]
         self._switch_state_value = from_ascii_hex(text[0:1])
-        self._switch_state = SwitchState.parseint(self._switch_state_value)
+        self._switch_state = SwitchState.parse_value(self._switch_state_value)
         if RESPONSE_ERROR == text[1:]:
             self._is_error = True
 
@@ -830,9 +830,9 @@ class EventLogResponse(Response):
         Response.__init__(self)
         text = text[len(CMD_EVENT_LOG):]
         self._event_qualifier_value = from_ascii_hex(text[0:1])
-        self._event_qualifier = ContactIDEventQualifier.parseint(self._event_qualifier_value)
+        self._event_qualifier = ContactIDEventQualifier.parse_value(self._event_qualifier_value)
         self._event_code_value = from_ascii_hex(text[1:4])
-        self._event_code = ContactIDEventCode.parseint(self._event_code_value)
+        self._event_code = ContactIDEventCode.parse_value(self._event_code_value)
         group_partition = from_ascii_hex(text[4:6])
         # self._?? = from_ascii_hex(text[6:7])
         self._device_category = DC_ALL[from_ascii_hex(text[7:8])]

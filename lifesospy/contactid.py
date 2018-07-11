@@ -31,9 +31,9 @@ class ContactID(object):
         if self._message_type not in [0x18, 0x98]:
             raise ValueError("ContactID message type is invalid.")
         self._event_qualifier_value = int(text[6:7], 16)
-        self._event_qualifier = EventQualifier.parseint(self._event_qualifier_value)
+        self._event_qualifier = EventQualifier.parse_value(self._event_qualifier_value)
         self._event_code_value = int(text[7:10], 16)
-        self._event_code = EventCode.parseint(self._event_code_value)
+        self._event_code = EventCode.parse_value(self._event_code_value)
         group_partition = int(text[10:12], 16)
         # Spec says zone/user uses next 3 digits; however LifeSOS uses the
         # first digit for device category index, and the remaining two digits

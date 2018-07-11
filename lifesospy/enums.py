@@ -4,7 +4,7 @@ This module contains all enumerations used by this library.
 
 import sys
 from enum import IntEnum
-from typing import TypeVar
+from typing import TypeVar, List, Iterable
 if float('%s.%s' % sys.version_info[:2]) >= 3.6:
     from enum import IntFlag # pylint: disable=ungrouped-imports,no-name-in-module
 else:
@@ -17,14 +17,19 @@ class IntEnumEx(IntEnum):
     """Extends IntEnum with some useful helper methods."""
 
     @classmethod
-    def parseint(cls, value: int, default: T = None) -> T:
-        """Parse specified value for IntEnum; return default if not found."""
-        return next((item for item in cls if value == item.value), default)
-
-    @classmethod
     def has_value(cls, value: int) -> bool:
         """True if specified value exists in int enum; otherwise, False."""
         return any(value == item.value for item in cls)
+
+    @classmethod
+    def parse_name(cls, name: str, default: T = None) -> T:
+        """Parse specified name for IntEnum; return default if not found."""
+        return next((item for item in cls if name == item.name), default)
+
+    @classmethod
+    def parse_value(cls, value: int, default: T = None) -> T:
+        """Parse specified value for IntEnum; return default if not found."""
+        return next((item for item in cls if value == item.value), default)
 
     def __str__(self):
         """Provides just the name representation of enum."""
@@ -33,6 +38,19 @@ class IntEnumEx(IntEnum):
 
 class IntFlagEx(IntFlag):
     """Extends IntFlag with some useful helper methods."""
+
+    @classmethod
+    def parse_names(cls, names: List[str]) -> T:
+        """Parse specified names for IntEnum; return default if not found."""
+        value = 0
+        iterable = cls  # type: Iterable
+        for name in names:
+            flag = next((item for item in iterable if name == item.name), None)
+            if not flag:
+                raise ValueError("{} is not a member of {}".format(
+                    name, cls.__name__))
+            value = value | int(flag)
+        return cls(value)
 
     def __str__(self):
         """Provides just the name representation of enum."""

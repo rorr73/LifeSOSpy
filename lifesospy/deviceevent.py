@@ -16,9 +16,9 @@ class DeviceEvent(object):
             raise ValueError("Event length is invalid.")
 
         self._event_code_value = int(text[7:11], 16)
-        self._event_code = EventCode.parseint(self._event_code_value)
+        self._event_code = EventCode.parse_value(self._event_code_value)
         self._device_type_value = int(text[11:13], 16)
-        self._device_type = DeviceType.parseint(self._device_type_value)
+        self._device_type = DeviceType.parse_value(self._device_type_value)
         self._device_id = int(text[13:19], 16)
         self._message_attribute = int(text[19:21], 16)
         self._device_characteristics = DCFlags(int(text[21:23], 16))
