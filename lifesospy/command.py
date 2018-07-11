@@ -248,8 +248,8 @@ class ChangeDeviceCommand(Command):
             to_ascii_hex(self._index, 2),
             to_ascii_hex(self._group_number, 2),
             to_ascii_hex(self._unit_number, 2),
-            to_ascii_hex(int(self._enable_status), 2),
-            to_ascii_hex(int(self._switches), 2))
+            to_ascii_hex(int(self._enable_status), 4),
+            to_ascii_hex(int(self._switches), 4))
 
     @property
     def device_category(self) -> DeviceCategory:
