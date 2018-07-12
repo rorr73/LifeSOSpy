@@ -31,12 +31,12 @@ def main(argv):
             PROJECT_VERSION, PROJECT_DESCRIPTION))
     parser.add_argument(
         '-H', '--host',
-        help="Hostname/IP Address for the LifeSOS ethernet interface.",
-        required=True)
+        help="Hostname/IP Address for the LifeSOS server, if we are to run as a client.",
+        default=None)
     parser.add_argument(
         '-P', '--port',
         help="TCP port for the LifeSOS ethernet interface.",
-        default='1680')
+        default=str(BaseUnit.TCP_PORT))
     parser.add_argument(
         '-p', '--password',
         help="Password for the Master user, if remote access requires it.",

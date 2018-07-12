@@ -25,11 +25,13 @@ from lifesospy.enums import (
     SwitchState, ContactIDEventCategory, ContactIDEventQualifier,
     ContactIDEventCode, DeviceEventCode)
 from lifesospy.propertychangedinfo import PropertyChangedInfo
+from lifesospy.protocol import Protocol
 from lifesospy.response import (
     Response, OpModeResponse, ROMVersionResponse, ExitDelayResponse,
     EntryDelayResponse, DateTimeResponse, DeviceInfoResponse,
     DeviceSettingsResponse, DeviceNotFoundResponse, DeviceAddedResponse,
     DeviceDeletedResponse, EventLogResponse, SensorLogResponse, SwitchResponse)
+from lifesospy.server import Server
 from lifesospy.util import serializable
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,11 +42,12 @@ class BaseUnit(AsyncHelper):
     Represents the base unit.
 
     Provides all management of the LifeSOS alarm system, monitoring attached
-    devices, events, and is used to issue commands. It will also attempt
-    reconnection automatically on failure.
+    devices, events, and is used to issue commands. When running as a client,
+    it will also attempt reconnection automatically on failure.
 
-    Your application can either use this class to provide management / higher
-    level access, or the Client class for direct access.
+    Your application can use the Client or Server class for direct access
+    to LifeSOS, or alternatively use the BaseUnit class to provide management
+    and higher level access.
     """
 
     # Property names
@@ -55,15 +58,30 @@ class BaseUnit(AsyncHelper):
     PROP_ROM_VERSION = 'rom_version'
     PROP_STATE = 'state'
 
-    # Default interval to wait between reconnect attempts
+    # Default interval to wait between client reconnection attempts
     RECONNECT_INTERVAL = 30
 
     # Allow this many retries when getting initial state
     RETRY_MAX = 3
 
-    def __init__(self, host: str, port: int):
+    # Default TCP port for LifeSOS communication
+    TCP_PORT = 1680
+
+    def __init__(self, host: str = None, port: int = TCP_PORT):
+        """
+        Initializes an instance of the BaseUnit class, to be run in either
+        client or server mode.
+
+        :param host: host name or IP address for the LifeSOS server if we are
+                     to be run as a client, or None to run as a server.
+        :param port: port number to connect to / listen on, depending on
+                     whether we're running as a client or server.
+        """
         AsyncHelper.__init__(self)
-        self._client = Client(host, port)
+        if host:
+            self._protocol = Client(host, port)
+        else:
+            self._protocol = Server(port)
         self._shutdown = False
         self._reconnect_interval = BaseUnit.RECONNECT_INTERVAL
         self._on_device_added = None
@@ -87,12 +105,12 @@ class BaseUnit(AsyncHelper):
         for switch_number in SwitchNumber:
             self._switch_state[switch_number] = None
 
-        # Assign callbacks to capture all client events
-        self._client.on_connection_made = self._handle_connection_made
-        self._client.on_connection_lost = self._handle_connection_lost
-        self._client.on_contact_id = self._handle_contact_id
-        self._client.on_device_event = self._handle_device_event
-        self._client.on_response = self._handle_response
+        # Assign callbacks to capture all events
+        self._protocol.on_connection_made = self._handle_connection_made
+        self._protocol.on_connection_lost = self._handle_connection_lost
+        self._protocol.on_contact_id = self._handle_contact_id
+        self._protocol.on_device_event = self._handle_device_event
+        self._protocol.on_response = self._handle_response
 
     #
     # PROPERTIES
@@ -114,9 +132,9 @@ class BaseUnit(AsyncHelper):
         return self._get_field_value(BaseUnit.PROP_EXIT_DELAY)
 
     @property
-    def host(self) -> str:
+    def host(self) -> Optional[str]:
         """Host name or IP address for the LifeSOS ethernet interface."""
-        return self._client.host
+        return self._protocol.host
 
     @property
     def is_connected(self) -> bool:
@@ -131,16 +149,16 @@ class BaseUnit(AsyncHelper):
     @property
     def password(self) -> str:
         """Control password, if one has been assigned on the base unit."""
-        return self._client.password
+        return self._protocol.password
 
     @password.setter
     def password(self, password: str):
-        self._client.password = password
+        self._protocol.password = password
 
     @property
-    def port(self) -> int:
+    def port(self) -> Optional[int]:
         """Port number for the LifeSOS ethernet interface."""
-        return self._client.port
+        return self._protocol.port
 
     @property
     def reconnect_interval(self) -> int:
@@ -270,8 +288,13 @@ class BaseUnit(AsyncHelper):
 
         self._shutdown = False
 
-        # Attempt to open client connection and schedule retry if needed
-        self.create_task(self._async_open)
+        # Start listening (if server) / Open connection (if client)
+        if isinstance(self._protocol, Server):
+            self.create_task(self._async_listen)
+        elif isinstance(self._protocol, Client):
+            self.create_task(self._async_open)
+        else:
+            raise NotImplementedError
 
     def stop(self) -> None:
         """
@@ -280,8 +303,8 @@ class BaseUnit(AsyncHelper):
 
         self._shutdown = True
 
-        # Close client connection if needed
-        self._client.close()
+        # Close connection if needed
+        self._protocol.close()
 
         # Cancel any pending tasks
         self.cancel_pending_tasks()
@@ -294,7 +317,7 @@ class BaseUnit(AsyncHelper):
                          property when issuing the command
         """
 
-        await self._client.async_execute(
+        await self._protocol.async_execute(
             ClearStatusCommand(),
             password=password)
 
@@ -305,7 +328,7 @@ class BaseUnit(AsyncHelper):
         :param category: category of device the base unit will listen for.
         """
 
-        await self._client.async_execute(
+        await self._protocol.async_execute(
             AddDeviceCommand(category))
 
     async def async_change_device(
@@ -334,10 +357,10 @@ class BaseUnit(AsyncHelper):
                 device.control_high_limit, device.control_low_limit)
             return
 
-        response = await self._client.async_execute(
+        response = await self._protocol.async_execute(
             GetDeviceCommand(device.category, device.group_number, device.unit_number))
         if isinstance(response, DeviceInfoResponse):
-            response = await self._client.async_execute(
+            response = await self._protocol.async_execute(
                 ChangeDeviceCommand(
                     device.category, response.index, group_number, unit_number,
                     enable_status, switches))
@@ -376,7 +399,7 @@ class BaseUnit(AsyncHelper):
         if not isinstance(device, SpecialDevice):
             raise ValueError("Device to be changed is not a Special device")
 
-        response = await self._client.async_execute(
+        response = await self._protocol.async_execute(
             GetDeviceCommand(device.category, device.group_number, device.unit_number))
         if isinstance(response, DeviceInfoResponse):
             # Control limits only specified when they are supported
@@ -392,7 +415,7 @@ class BaseUnit(AsyncHelper):
                     enable_status, switches, response.current_status, response.down_count,
                     response.message_attribute, response.current_reading, special_status,
                     high_limit, low_limit)
-            response = await self._client.async_execute(command)
+            response = await self._protocol.async_execute(command)
             if isinstance(response, DeviceSettingsResponse):
                 device._handle_response(response) # pylint: disable=protected-access
         if isinstance(response, DeviceNotFoundResponse):
@@ -408,10 +431,10 @@ class BaseUnit(AsyncHelper):
         # Lookup device using zone to obtain an accurate index, which is
         # needed to perform the delete command
         device = self._devices[device_id]
-        response = await self._client.async_execute(
+        response = await self._protocol.async_execute(
             GetDeviceCommand(device.category, device.group_number, device.unit_number))
         if isinstance(response, DeviceInfoResponse):
-            response = await self._client.async_execute(
+            response = await self._protocol.async_execute(
                 DeleteDeviceCommand(device.category, response.index))
             if isinstance(response, DeviceDeletedResponse):
                 self._devices._delete(device) # pylint: disable=protected-access
@@ -433,7 +456,7 @@ class BaseUnit(AsyncHelper):
         :return: Response containing the event log entry, or None if not found.
         """
 
-        response = await self._client.async_execute(
+        response = await self._protocol.async_execute(
             GetEventLogCommand(index))
         if isinstance(response, EventLogResponse):
             return response
@@ -447,7 +470,7 @@ class BaseUnit(AsyncHelper):
         :return: Response containing the sensor log entry, or None if not found.
         """
 
-        response = await self._client.async_execute(
+        response = await self._protocol.async_execute(
             GetSensorLogCommand(index))
         if isinstance(response, SensorLogResponse):
             return response
@@ -461,7 +484,7 @@ class BaseUnit(AsyncHelper):
                          if not specified or none, the current date/time is used.
         """
 
-        await self._client.async_execute(
+        await self._protocol.async_execute(
             SetDateTimeCommand(value))
 
     async def async_set_operation_mode(
@@ -474,7 +497,7 @@ class BaseUnit(AsyncHelper):
                          property when issuing the command
         """
 
-        await self._client.async_execute(
+        await self._protocol.async_execute(
             SetOpModeCommand(operation_mode),
             password=password)
 
@@ -487,7 +510,7 @@ class BaseUnit(AsyncHelper):
         :param state: True to turn on, False to turn off.
         """
 
-        await self._client.async_execute(
+        await self._protocol.async_execute(
             SetSwitchCommand(
                 switch_number,
                 SwitchState.On if state else SwitchState.Off))
@@ -514,21 +537,33 @@ class BaseUnit(AsyncHelper):
     # METHODS - Private / Internal
     #
 
+    async def _async_listen(self) -> None:
+        # Only supported in Server mode
+        if not isinstance(self._protocol, Server):
+            raise NotImplementedError
+
+        _LOGGER.debug("Listening on port %s", self._protocol.listen_port)
+        await self._protocol.async_listen()
+
     async def _async_open(self) -> None:
-        _LOGGER.debug("Connecting")
+        # Only supported in Client mode
+        if not isinstance(self._protocol, Client):
+            raise NotImplementedError
+
+        _LOGGER.debug("Connecting to %s:%s", self._protocol.host, self._protocol.port)
         try:
-            await self._client.async_open()
+            await self._protocol.async_open()
         except Exception: # pylint: disable=broad-except
             _LOGGER.error("Failed to open client connection. Will retry in %s seconds",
                           self._reconnect_interval, exc_info=True)
             self._loop.call_later(self._reconnect_interval, self._reconnect)
 
     def _reconnect(self) -> None:
-        if self._shutdown:
+        if self._shutdown or not isinstance(self._protocol, Client):
             return
         self.create_task(self._async_open)
 
-    def _handle_connection_made(self, client: Client) -> None:
+    def _handle_connection_made(self, protocol: Protocol) -> None:
         _LOGGER.info("Connected successfully")
         self._set_field_values({BaseUnit.PROP_IS_CONNECTED: True})
 
@@ -571,13 +606,18 @@ class BaseUnit(AsyncHelper):
 
         _LOGGER.info("Device discovery completed and got initial state")
 
-    def _handle_connection_lost(self, client: Client, ex: Exception) -> None:
-        _LOGGER.error("Connection was lost. Will attempt to reconnect in %s seconds",
-                      self._reconnect_interval, exc_info=ex)
-        self._set_field_values({BaseUnit.PROP_IS_CONNECTED: False})
-        self._loop.call_later(self._reconnect_interval, self._reconnect)
+    def _handle_connection_lost(self, protocol: Protocol, ex: Exception) -> None:
+        if isinstance(self._protocol, Server):
+            _LOGGER.error("Connection was lost", exc_info=ex)
+        elif isinstance(self._protocol, Client):
+            # When we lose connection as a Client, schedule reconnect attempt
+            _LOGGER.error("Connection was lost. Will attempt to reconnect in %s seconds",
+                          self._reconnect_interval, exc_info=ex)
+            self._loop.call_later(self._reconnect_interval, self._reconnect)
 
-    def _handle_contact_id(self, client: Client, contact_id: ContactID) -> None:
+        self._set_field_values({BaseUnit.PROP_IS_CONNECTED: False})
+
+    def _handle_contact_id(self, protocol: Protocol, contact_id: ContactID) -> None:
         # Skip if event code was unrecognised
         if contact_id.event_code is None:
             return
@@ -618,7 +658,7 @@ class BaseUnit(AsyncHelper):
                     "Unhandled exception in on_event callback",
                     exc_info=True)
 
-    def _handle_device_event(self, client: Client, device_event: DeviceEvent) -> None:
+    def _handle_device_event(self, protocol: Protocol, device_event: DeviceEvent) -> None:
         # Get device; there is a chance it may not exist when:
         #  - Client has just connected but has not yet enumerated devices, in
         #    which case we can just ignore since we'll be getting the info later
@@ -673,7 +713,7 @@ class BaseUnit(AsyncHelper):
                 self._set_field_values(
                     {BaseUnit.PROP_STATE: BaseUnitState.AwayEntryDelay})
 
-    def _handle_response(self, client: Client, response: Response, command: Command) -> None:
+    def _handle_response(self, protocol: Protocol, response: Response, command: Command) -> None:
         # Update any properties of the base unit
         if isinstance(response, ROMVersionResponse):
             self._set_field_values({
@@ -770,9 +810,9 @@ class BaseUnit(AsyncHelper):
             if self._shutdown or not self.is_connected:
                 return None
             try:
-                return await self._client.async_execute(command)
+                return await self._protocol.async_execute(command)
             except ConnectionError:
-                # Client no longer connected; don't bother retrying
+                # No longer connected; don't bother retrying
                 return None
             except Exception: # pylint: disable=broad-except
                 _LOGGER.error("%s [Attempt %s/%s]",

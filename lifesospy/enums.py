@@ -4,7 +4,7 @@ This module contains all enumerations used by this library.
 
 import sys
 from enum import IntEnum
-from typing import TypeVar, List, Iterable
+from typing import TypeVar, List, Iterable # pylint: disable=unused-import
 if float('%s.%s' % sys.version_info[:2]) >= 3.6:
     from enum import IntFlag # pylint: disable=ungrouped-imports,no-name-in-module
 else:
