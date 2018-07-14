@@ -5,7 +5,7 @@ This module contains all common constants used by this library.
 # Project metadata
 PROJECT_NAME = 'lifesospy'
 PROJECT_DESCRIPTION = "Provides an interface to LifeSOS alarm systems."
-PROJECT_VERSION = '0.7.3'
+PROJECT_VERSION = '0.7.4'
 __version__ = PROJECT_VERSION
 
 # Command names

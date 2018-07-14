@@ -24,7 +24,10 @@ class IntEnumEx(IntEnum):
     @classmethod
     def parse_name(cls, name: str, default: T = None) -> T:
         """Parse specified name for IntEnum; return default if not found."""
-        return next((item for item in cls if name == item.name), default)
+        if not name:
+            return default
+        name = name.lower()
+        return next((item for item in cls if name == item.name.lower()), default)
 
     @classmethod
     def parse_value(cls, value: int, default: T = None) -> T:
@@ -45,7 +48,8 @@ class IntFlagEx(IntFlag):
         value = 0
         iterable = cls  # type: Iterable
         for name in names:
-            flag = next((item for item in iterable if name == item.name), None)
+            name = name.lower()
+            flag = next((item for item in iterable if name == item.name.lower()), None)
             if not flag:
                 raise ValueError("{} is not a member of {}".format(
                     name, cls.__name__))
