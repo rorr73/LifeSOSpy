@@ -10,11 +10,12 @@ from lifesospy.asynchelper import AsyncHelper
 from lifesospy.client import Client
 from lifesospy.command import (
     Command, GetDeviceCommand, GetDeviceByIndexCommand, GetROMVersionCommand,
-    GetExitDelayCommand, GetEntryDelayCommand, SetDateTimeCommand,
-    ClearStatusCommand, AddDeviceCommand, ChangeDeviceCommand,
-    ChangeSpecialDeviceCommand, ChangeSpecial2DeviceCommand,
-    DeleteDeviceCommand, GetEventLogCommand, GetSensorLogCommand,
-    GetOpModeCommand, SetOpModeCommand, GetSwitchCommand, SetSwitchCommand)
+    GetExitDelayCommand, GetEntryDelayCommand, GetDateTimeCommand,
+    SetDateTimeCommand, ClearStatusCommand, AddDeviceCommand,
+    ChangeDeviceCommand, ChangeSpecialDeviceCommand,
+    ChangeSpecial2DeviceCommand, DeleteDeviceCommand, GetEventLogCommand,
+    GetSensorLogCommand, GetOpModeCommand, SetOpModeCommand, GetSwitchCommand,
+    SetSwitchCommand)
 from lifesospy.contactid import ContactID
 from lifesospy.device import Device, SpecialDevice, DeviceCollection
 from lifesospy.devicecategory import (
@@ -447,6 +448,19 @@ class BaseUnit(AsyncHelper):
                             exc_info=True)
         if isinstance(response, DeviceNotFoundResponse):
             raise ValueError("Device to be deleted was not found")
+
+    async def async_get_datetime(self) -> Optional[datetime]:
+        """
+        Get the date/time on the base unit.
+
+        :return: the date/time to be set on the base unit.
+        """
+
+        response = await self._protocol.async_execute(
+            GetDateTimeCommand())
+        if isinstance(response, DateTimeResponse):
+            return response.remote_datetime
+        return None
 
     async def async_get_event_log(self, index: int) -> Optional[EventLogResponse]:
         """

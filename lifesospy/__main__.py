@@ -86,6 +86,7 @@ def _handle_interactive_baseunit_tests(
         "'away' - set Away mode\n"
         "'monitor' - set Monitor mode\n"
         "'clear' - clear status LEDs and stop siren\n"
+        "'getdatetime' - get remote date/time\n"
         "'setdatetime' - set remote date/time to match local\n"
         "'sw##' - toggle switch; ## must be between 01 and 16\n"
         "'add X' - add new device for category X (one of c/b/f/m/e)\n"
@@ -140,6 +141,20 @@ def _handle_interactive_baseunit_tests(
 
             asyncio.run_coroutine_threadsafe(
                 async_clear_status(), loop)
+
+        # Get current date/time
+        elif line == 'getdatetime':
+            async def async_get_datetime():
+                try:
+                    value = await baseunit.async_get_datetime()
+                    if value:
+                        print("Base unit date/time is {}.".format(
+                            value.strftime('%a %d %b %Y %I:%M %p')))
+                except Exception:
+                    traceback.print_exc()
+
+            asyncio.run_coroutine_threadsafe(
+                async_get_datetime(), loop)
 
         # Set current date/time
         elif line == 'setdatetime':
