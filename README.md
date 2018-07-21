@@ -1,8 +1,10 @@
 # LifeSOSpy
 
+[![PyPI version](https://badge.fury.io/py/lifesospy.svg)](https://badge.fury.io/py/lifesospy)
+
 A Python library to communicate with [LifeSOS](http://lifesos.com.tw)
-alarm systems. In some markets, they may be labelled under the name of
-the distributor; eg. SecurePro in Australia, WeBeHome in northern
+alarm systems. In some markets, they may also be labelled under the name
+of the distributor; eg. SecurePro in Australia, WeBeHome in northern
 Europe.
 
 It was written for & tested with the LS-30 model, though it should also
@@ -12,15 +14,19 @@ The base unit must be connected to your network in order for this
 library to communicate with it; serial connections are not currently
 supported.
 
+Note: This library is intended for developer use. If you're just
+looking to access your LifeSOS alarm system, devices and switches from
+other applications, I'd suggest taking a look at
+[LifeSOSpy_MQTT](https://github.com/rorr73/LifeSOSpy_MQTT) instead.
+It provides an MQTT Client implementation that easily integrates with
+applications that support MQTT (eg. Home Assistant, OpenHAB).
+
+---
+
 When using this library in your app there are three main classes to
 choose from:
 
-##### Client / Server
-
-These two classes allow you to directly issue commands to the alarm
-system, and attach callbacks to handle any events if needed.
-
-##### BaseUnit
+### BaseUnit
 
 Provides higher level access to the alarm system, managing the Client
 / Server connection for you. It will automatically enumerate all
@@ -31,7 +37,12 @@ attempt reconnection (when running as client).
 This class was created to simplify integration into home automation
 software.
 
-## Simple Client Examples
+### Client / Server
+
+These two classes allow you to directly issue commands to the alarm
+system, and attach callbacks to handle any events if needed.
+
+##### Simple Client Examples
 
 ###### Display the current mode
 
