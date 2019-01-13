@@ -637,8 +637,13 @@ class BaseUnit(AsyncHelper):
             return
 
         # Change of operation mode
-        if contact_id.event_code == ContactIDEventCode.Away or \
-                contact_id.event_code == ContactIDEventCode.Away_QuickArm:
+        # Note: My LS-30 uses 'Away_QuickArm'/'Disarm' events for Away & Disarm
+        # but another user provided a log where their unit uses an 'Away' event
+        # with the qualifier indicating if disarmed or armed (refer to
+        # https://github.com/rorr73/LifeSOSpy_MQTT/issues/1 for details)
+        if contact_id.event_code == ContactIDEventCode.Away_QuickArm or \
+                (contact_id.event_code == ContactIDEventCode.Away and
+                 contact_id.event_qualifier == ContactIDEventQualifier.Restore):
             self._set_field_values({
                 BaseUnit.PROP_OPERATION_MODE: OperationMode.Away,
                 BaseUnit.PROP_STATE: BaseUnitState.Away})
@@ -646,7 +651,9 @@ class BaseUnit(AsyncHelper):
             self._set_field_values({
                 BaseUnit.PROP_OPERATION_MODE: OperationMode.Home,
                 BaseUnit.PROP_STATE: BaseUnitState.Home})
-        elif contact_id.event_code == ContactIDEventCode.Disarm:
+        elif contact_id.event_code == ContactIDEventCode.Disarm or \
+                (contact_id.event_code == ContactIDEventCode.Away and
+                 contact_id.event_qualifier == ContactIDEventQualifier.Event):
             self._set_field_values({
                 BaseUnit.PROP_OPERATION_MODE: OperationMode.Disarm,
                 BaseUnit.PROP_STATE: BaseUnitState.Disarm})
