@@ -1,5 +1,7 @@
 # LifeSOSpy
 
+***Note: This project is no longer being developed.***
+
 [![PyPI version](https://badge.fury.io/py/lifesospy.svg)](https://badge.fury.io/py/lifesospy)
 
 A Python library to communicate with [LifeSOS](http://lifesos.com.tw)
